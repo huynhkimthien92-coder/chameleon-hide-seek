@@ -1,0 +1,26 @@
+# ⚠️ KHÔNG CÒN LÀ HƯỚNG DEPLOY CHÍNH — đã đổi sang Render vì Fly.io bắt buộc
+# thẻ tín dụng dù dùng free tier. Xem docs/deployment-guide.md (Render + Vercel).
+# File này giữ lại phòng trường hợp sau này muốn quay lại dùng Fly.io.
+#
+# Đổi "app" thành tên app Fly.io thật của bạn (tạo bằng `flyctl apps create`)
+app = "chameleon-hide-seek-server"
+primary_region = "sin" # Singapore — gần Việt Nam nhất trong các region Fly.io
+
+[build]
+
+[env]
+  PORT = "2567"
+  # CLIENT_ORIGIN nên set qua `flyctl secrets set CLIENT_ORIGIN=https://your-app.vercel.app`
+  # (không hardcode domain thật vào file này nếu repo public)
+
+[http_service]
+  internal_port = 2567
+  force_https = true
+  auto_stop_machines = false   # KHÔNG để true — sẽ làm mất state room đang chơi giữa trận
+  auto_start_machines = true
+  min_machines_running = 1     # giữ ít nhất 1 máy sống liên tục (xem stack.md mục 8)
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
