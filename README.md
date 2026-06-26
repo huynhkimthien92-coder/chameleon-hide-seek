@@ -33,6 +33,37 @@ Tài liệu thiết kế đầy đủ ở [`/docs`](./docs): [vision](./docs/vis
 
 **Lưu ý quan trọng — đừng hiểu nhầm:** việc này **không giảm tổng dung lượng tải** (vẫn ~1.2MB gzip, vì Rapier WASM tự nó đã to, không nén/cắt bớt được mà vẫn giữ tính năng). Lợi ích thật là **cache tốt hơn**: vendor ít đổi giữa các lần deploy, nên người chơi quay lại không phải tải lại phần đó — chỉ tải lại phần code app (242KB) đổi thường xuyên. Muốn giảm tải ban đầu thật (trì hoãn tải Rapier tới khi vào trận) thì cần thêm màn hình "Loading/Click to Play" + `dynamic import()`, chưa làm vì game hiện vào thẳng map ngay, chưa có lobby screen để trì hoãn.
 
+## Vẽ tự do (UV-paint) — thay cho chia ô đầu/thân/tay/chân
+
+Theo yêu cầu: bỏ hẳn việc chọn 1-trong-4 ô cố định rồi "Áp dụng" — giờ người chơi **tự chọn vị trí bằng cách nhắm trực tiếp lên người mình** (third-person), giữ chuột trái để vẽ liên tục như cọ vẽ thật, nhiều màu khác nhau tại nhiều vị trí tuỳ ý trên cùng 1 phần cơ thể.
+
+**Vì sao trước đây chia ô**: mannequin gốc lúc đó chưa có UV map (chỉ có toạ độ điểm, không có toạ độ texture) — không có cách nào biết "điểm nhắm trúng ứng với pixel nào". Đã giải quyết bằng cách tạo lại UV cho mannequin (xem `docs/asset-brief.md` mục đã cập nhật).
+
+**Đã làm:**
+- **Mannequin có UV thật**: spherical projection cho đầu, cylindrical 2-nửa trái/phải cho thân/tay/chân (`split_parts_with_uv.mjs`, script không nằm trong repo — chạy 1 lần để sinh `mannequin.glb`). Verify bằng checker pattern phủ lên hình 3D — mịn (10x10) bị nhiễu nhẹ do mesh gốc có chi tiết nhỏ, nhưng ở độ thô phù hợp việc vẽ (3x3) thì đều đặn, dùng được.
+- **Canvas vẽ riêng từng phần/từng player** (`paintRegistry.ts`): mỗi player có 4 canvas (đầu/thân/tay/chân), vẽ chấm màu (`paintDab`) tại đúng toạ độ UV nhắm trúng — sống ngoài React vì network handler cần vẽ lên canvas của BẤT KỲ player nào, không chỉ player đang render.
+- **Camera third-person giờ orbit đủ pitch** (lên/xuống) — trước đó khoá cứng nhìn ngực, không thể nhắm lên đầu/xuống chân chính mình. Đây là điều kiện cần phải sửa trước khi làm được tính năng này.
+- **Đồng bộ qua stroke, không qua Schema**: mỗi nét vẽ là 1 message `paintStroke` {part, u, v, color, radius}, server validate rồi broadcast cho người khác (trừ người vẽ — họ đã vẽ optimistic cục bộ). Lịch sử nét vẽ lưu plain object phía server (không qua Colyseus Schema vì danh sách có thể dài) — gửi 1 lần cho người mới vào phòng để "đuổi kịp" hiện trạng (catch-up).
+- Verify bằng smoke test mở rộng: broadcast đúng người, người vẽ không tự nhận lại nét mình, input rác (toạ độ ngoài [0,1], màu giả, part giả) bị từ chối hoàn toàn (0 broadcast), client mới vào nhận đúng lịch sử — **5/5 PASS** phần này (13/13 cộng dồn cả file).
+
+⚠️ **Hạn chế đã biết**: UV tính bằng công thức xấp xỉ (không phải unwrap thật từ Blender) nên có méo nhẹ ở vài vùng giao nhau (nách, bẹn) — đủ dùng cho việc vẽ chấm màu, nhưng nếu cần chính xác cao hơn thì cần Blender unwrap thật.
+
+## Camera/Mobile/Input — đã sửa & còn cần làm
+
+✅ **Bug "picker không sáng lên" ở third-person** — đã sửa, xem mục bug fix bên dưới (đo khoảng cách từ nhân vật, không phải camera) + đã sửa thêm camera orbit pitch ở trên.
+
+⏳ **Mobile/cảm ứng**: đã xác nhận với người dùng là **mục tiêu cuối có cần** — chưa làm, sẽ làm sau (joystick ảo + vuốt nhìn quanh + nút chạm bắn/vẽ). Ưu tiên vẽ tự do trước theo yêu cầu.
+
+## Bug đã sửa từ test thật trên bản deploy
+
+✅ **Sàn không ổn định (player giật/lún/đứng không vững)** — nguyên nhân: sàn dùng collider `trimesh` (lưới tam giác), kiểu này không ổn định khi có vật thể động (player) tiếp xúc liên tục — đã đổi sang box mỏng + `cuboid` (giống mọi khối màu khác trong scene, vốn luôn ổn định).
+
+⚠️ **Chưa leo được bậc thang/vật cản thấp** — KHÔNG phải bug ngẫu nhiên, là hạn chế thật của character controller hiện tại (RigidBody động + velocity đơn giản, chưa có auto-step). Luôn bị chặn như đụng tường ở mọi vật cản có độ cao, mọi lúc. Cách sửa đúng: viết lại bằng `KinematicCharacterController` của Rapier (có `enableAutostep`/`enableSnapToGround` sẵn) — việc lớn hơn, chưa làm, cần xác nhận trước khi viết lại vì rủi ro lỗi tinh tế cao hơn (không test được trực tiếp trên browser thật trong môi trường code hiện tại).
+
+✅ **Picker/ngắm bắn không hoạt động ở third-person** — nguyên nhân: code đo "trong tầm" bằng khoảng cách từ **camera** tới điểm chạm, nhưng Hider mặc định ở third-person (camera lùi sau nhân vật ~5 unit) — nên dù nhân vật đứng sát bề mặt, camera vẫn cách xa hơn tầm cho phép. Đã sửa: đo khoảng cách từ **vị trí nhân vật** (lưu vào store mỗi frame), không phải từ camera. Ảnh hưởng cả picker (Hider) và ngắm bắn (Seeker).
+
+⚠️ **Chưa hỗ trợ điện thoại/cảm ứng** — KHÔNG phải bug, là tính năng chưa làm: toàn bộ input hiện tại (WASD, pointer-lock chuột, mousedown) chỉ hoạt động với bàn phím + chuột thật, chưa có joystick ảo/nút chạm nào. Cần xác nhận có thật cần hỗ trợ mobile không trước khi làm — đây là 1 lớp input mới, không phải chỉnh nhỏ.
+
 ## Trạng thái hiện tại
 
 ✅ **Giai đoạn 1 (Hạ tầng 3D + Khung Multiplayer) — đã xong & verify:**
@@ -98,7 +129,7 @@ npm run dev             # http://localhost:5173
 Mở 2-3 tab trình duyệt để thấy nhiều player đồng bộ với nhau (cần ≥2 người để lobby tự bắt đầu trận sau `LOBBY_GRACE_MS`). Điều khiển:
 - Click vào canvas: bắt đầu nhìn bằng chuột (pointer lock).
 - `WASD`: di chuyển · `V`: đổi First/Third person.
-- **Nếu là Hider**: nhìn vào bề mặt rồi **click trái** để hút màu → chọn bộ phận → **Áp dụng**. Toolbar dưới màn hình còn có dãy nút đổi pose (kể cả "Đóng băng").
+- **Nếu là Hider**: nhìn vào bề mặt môi trường rồi **click** để hút màu (cầm sẵn) → nhắm vào **đúng vị trí trên người mình** muốn vẽ (third-person, chuột điều khiển cả lên/xuống) → **giữ chuột trái** để vẽ liên tục như cọ thật, tự do chọn vị trí, không bị ép vào 4 ô cố định. Toolbar dưới màn hình còn có dãy nút đổi pose (kể cả "Đóng băng").
 - **Nếu là Seeker**: ngắm vào người chơi khác (crosshair chuyển xanh khi ngắm đúng 1 Hider còn sống trong tầm) rồi **click trái** để bắn — 5 viên, không reload.
 
 **Smoke test nhanh (không cần mở browser)** — xác nhận server hoạt động đúng (vị trí, tô màu không lộ chéo, validate input, pose, combat, win condition, anti-cheat freeze):

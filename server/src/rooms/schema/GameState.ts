@@ -2,9 +2,13 @@ import { Schema, type, MapSchema } from "@colyseus/schema";
 
 /**
  * State của 1 player trong room.
- * colorHead/Torso/Arms/Legs + pose mới chỉ khai báo sẵn (giá trị mặc định) —
- * sẽ được client thực sự gửi/đọc ở Giai đoạn 2 (cơ chế Chameleon).
- * Khai báo trước để tránh phải migrate schema giữa các giai đoạn.
+ *
+ * KHÔNG còn colorHead/Torso/Arms/Legs (đã bỏ) — màu giờ là vẽ tự do bằng nét
+ * cọ lên canvas riêng từng phần (paintRegistry.ts phía client), không phải
+ * 1 giá trị màu/phần. Lịch sử nét vẽ lưu riêng ở GameRoom.ts (plain object,
+ * KHÔNG qua Schema — vì danh sách nét vẽ có thể dài, không hợp để đồng bộ
+ * qua state diffing như Colyseus Schema; thay vào đó dùng broadcast message
+ * "paintStroke" + gửi lại toàn bộ lịch sử 1 lần cho người mới vào phòng).
  */
 export class PlayerState extends Schema {
   @type("number") x = 0;
@@ -16,11 +20,6 @@ export class PlayerState extends Schema {
   @type("string") pose: "idle" | "crouch" | "lean" | "lay" | "freeze" = "idle";
   @type("boolean") eliminated = false;
   @type("uint8") ammo = 5;
-
-  @type("string") colorHead = "#ffffff";
-  @type("string") colorTorso = "#ffffff";
-  @type("string") colorArms = "#ffffff";
-  @type("string") colorLegs = "#ffffff";
 }
 
 /** Theo vision.md mục 3: 2 Seeker / 4 Hider, trận đếm ngược 180s. */

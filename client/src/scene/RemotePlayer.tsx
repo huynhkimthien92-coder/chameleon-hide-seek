@@ -1,21 +1,26 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { RemotePlayerState } from "../store/useGameStore";
-import { Mannequin } from "./Mannequin";
+import { Mannequin, releaseMannequinCanvases } from "./Mannequin";
 import { getPoseOffset } from "./poseTransform";
 
 /**
  * Render player khác trong room tại vị trí đồng bộ từ Colyseus.
  *
- * LƯU Ý THIẾT KẾ: mannequin KHÔNG tô theo màu team (đỏ/xanh) nữa — chỉ dùng
- * đúng màu mà người chơi đó đã tự sơn (colorHead/Torso/Arms/Legs từ server).
- * Tô theo team sẽ lộ ngay ai là Seeker/Hider, phá vỡ cơ chế camouflage là
- * trọng tâm của game (xem vision.md). Phân biệt team chỉ nên hiện ở UI/HUD
- * (icon, không phải màu mannequin trong thế giới game) — xem design.md mục 2.
+ * LƯU Ý THIẾT KẾ: mannequin KHÔNG tô theo màu team (đỏ/xanh) — chỉ hiện đúng
+ * những gì người chơi đó đã tự vẽ lên canvas riêng của họ (paintRegistry.ts,
+ * đồng bộ qua message "paintStroke" — xem net/colyseus.ts). Tô theo team sẽ
+ * lộ ngay ai là Seeker/Hider, phá vỡ cơ chế camouflage là trọng tâm của game.
  */
 export function RemotePlayer({ player }: { player: RemotePlayerState }) {
   const groupRef = useRef<THREE.Group>(null);
+
+  // Giải phóng canvas vẽ khi player này thật sự rời phòng (unmount hẳn,
+  // không phải lúc eliminated — eliminated chỉ ẩn render, xem return null dưới).
+  useEffect(() => {
+    return () => releaseMannequinCanvases(player.id);
+  }, [player.id]);
 
   useFrame(() => {
     if (!groupRef.current) return;
@@ -45,7 +50,7 @@ export function RemotePlayer({ player }: { player: RemotePlayerState }) {
         position={[0, pose.posY, 0]}
         scale={[1, pose.scaleY, 1]}
       >
-        <Mannequin colors={player.colors} />
+        <Mannequin sessionId={player.id} />
       </group>
     </group>
   );

@@ -109,7 +109,7 @@ export function HUD() {
         <span>· {remoteCount} người chơi khác</span>
         <div className="text-xs opacity-60 basis-full mt-1">
           Click vào màn hình để bắt đầu · WASD di chuyển · V đổi góc nhìn ·{" "}
-          {team === "seeker" ? "Click trái để bắn" : "Click trái để hút màu"}
+          {team === "seeker" ? "Click trái để bắn" : "Click để hút màu · Nhắm vào người mình + giữ chuột để vẽ"}
         </div>
       </div>
     </div>

@@ -1,6 +1,8 @@
 import { Client, getStateCallbacks, type Room } from "@colyseus/sdk";
-import { useGameStore, type BodyPart } from "../store/useGameStore";
+import { useGameStore } from "../store/useGameStore";
 import type { Pose } from "../scene/poseTransform";
+import type { BodyPart, Stroke } from "../scene/paintRegistry";
+import { paintDab, replayStrokes } from "../scene/paintRegistry";
 
 const SERVER_URL = import.meta.env.VITE_COLYSEUS_URL ?? "ws://localhost:2567";
 
@@ -61,12 +63,6 @@ export async function connectToGame() {
           team: player.team,
           pose: player.pose,
           eliminated: player.eliminated,
-          colors: {
-            head: player.colorHead,
-            torso: player.colorTorso,
-            arms: player.colorArms,
-            legs: player.colorLegs,
-          },
         });
 
       sync();
@@ -76,6 +72,19 @@ export async function connectToGame() {
     $(room.state).players.onRemove((_player: any, sessionId: string) => {
       useGameStore.getState().removeRemotePlayer(sessionId);
       useGameStore.getState().setPlayerCount(room?.state.players.size ?? 0);
+    });
+
+    // Người khác vẽ -> vẽ lại lên đúng canvas của họ (xem paintRegistry.ts).
+    // Không nhận lại nét của chính mình (server đã loại trừ — `except: client`).
+    room.onMessage("paintStroke", (data: any) => {
+      paintDab(data.sessionId, data.part, data.u, data.v, data.color, data.radius);
+    });
+
+    // Catch-up lúc mới vào phòng: vẽ lại toàn bộ nét đã có của mọi người.
+    room.onMessage("paintHistoryBatch", (history: Record<string, Stroke[]>) => {
+      for (const [sessionId, strokes] of Object.entries(history)) {
+        replayStrokes(sessionId, strokes);
+      }
     });
 
     room.onLeave(() => {
@@ -96,9 +105,9 @@ export function sendLocalTransform(x: number, y: number, z: number, rotY: number
   room.send("move", { x, y, z, rotY });
 }
 
-/** Gửi 1 lần khi người chơi bấm "Áp dụng" màu lên 1 bộ phận. */
-export function sendPaint(part: BodyPart, color: string) {
-  room?.send("paint", { part, color });
+/** Gửi 1 nét vẽ (chấm cọ) — gọi liên tục lúc kéo chuột vẽ, đã throttle ở phía gọi (useInteraction.ts). */
+export function sendPaintStroke(part: BodyPart, u: number, v: number, color: string, radius: number) {
+  room?.send("paintStroke", { part, u, v, color, radius });
 }
 
 /** Gửi 1 lần khi người chơi đổi pose. */

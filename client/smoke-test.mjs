@@ -46,24 +46,50 @@ async function run() {
     Math.abs(playerAFromB.x - 3.5) < 0.001 &&
     Math.abs(playerAFromB.z - (-2)) < 0.001;
 
-  // --- Test 2: paint (tô màu) — A tô đầu màu đỏ, B phải thấy đúng màu,
-  // và màu của B (player B tự nhìn chính mình) KHÔNG được bị ảnh hưởng
-  // (đây chính là lỗi "đổi màu chéo" mà stack.md mục 4 cảnh báo).
-  roomA.send("paint", { part: "head", color: "#ff0000" });
+  // --- Test 2: paintStroke broadcast — A vẽ, B phải nhận được qua message
+  // (không phải qua Schema nữa), A KHÔNG được nhận lại nét của chính mình.
+  let bReceivedStroke = null;
+  let aReceivedOwnStroke = false;
+  roomB.onMessage("paintStroke", (data) => {
+    bReceivedStroke = data;
+  });
+  roomA.onMessage("paintStroke", () => {
+    aReceivedOwnStroke = true;
+  });
+
+  roomA.send("paintStroke", { part: "head", u: 0.5, v: 0.5, color: "#ff0000", radius: 0.06 });
   await new Promise((r) => setTimeout(r, 300));
 
-  const aHeadFromB = roomB.state.players.get(roomA.sessionId)?.colorHead;
-  const bHeadFromB = roomB.state.players.get(roomB.sessionId)?.colorHead;
-  const paintOk = aHeadFromB === "#ff0000" && bHeadFromB === "#ffffff";
-  log("TEST", `A.colorHead (qua B) = ${aHeadFromB}, B.colorHead (qua B) = ${bHeadFromB}`);
+  const paintOk =
+    bReceivedStroke?.sessionId === roomA.sessionId &&
+    bReceivedStroke?.part === "head" &&
+    bReceivedStroke?.color === "#ff0000" &&
+    !aReceivedOwnStroke;
+  log("TEST", `B nhận stroke từ A = ${JSON.stringify(bReceivedStroke)}, A tự nhận lại nét mình = ${aReceivedOwnStroke}`);
 
-  // --- Test 3: input rác phải bị server từ chối (validate) ---
-  roomA.send("paint", { part: "head", color: "javascript:alert(1)" });
-  roomA.send("paint", { part: "not_a_real_part", color: "#000000" });
+  // --- Test 3: input rác phải bị server từ chối (không broadcast gì cả) ---
+  let garbageBroadcastCount = 0;
+  roomB.onMessage("paintStroke", () => {
+    garbageBroadcastCount++;
+  });
+  roomA.send("paintStroke", { part: "head", u: 0.5, v: 0.5, color: "javascript:alert(1)", radius: 0.06 });
+  roomA.send("paintStroke", { part: "not_a_real_part", u: 0.5, v: 0.5, color: "#000000", radius: 0.06 });
+  roomA.send("paintStroke", { part: "head", u: 99, v: 0.5, color: "#000000", radius: 0.06 }); // u ngoài [0,1]
   await new Promise((r) => setTimeout(r, 200));
-  const headAfterGarbage = roomB.state.players.get(roomA.sessionId)?.colorHead;
-  const validateOk = headAfterGarbage === "#ff0000"; // không đổi vì input rác bị từ chối
-  log("TEST", `colorHead sau khi gửi input rác = ${headAfterGarbage} (phải vẫn là #ff0000)`);
+  const validateOk = garbageBroadcastCount === 0;
+  log("TEST", `số broadcast nhận được từ 3 input rác = ${garbageBroadcastCount} (phải = 0)`);
+
+  // --- Test 3b: catch-up — client mới vào phải nhận lại nét đã vẽ trước đó ---
+  const clientC = new Client(SERVER_URL);
+  const roomC = await clientC.joinOrCreate("game");
+  let cHistory = null;
+  roomC.onMessage("paintHistoryBatch", (history) => {
+    cHistory = history;
+  });
+  await new Promise((r) => setTimeout(r, 300));
+  const catchUpOk = cHistory?.[roomA.sessionId]?.some((s) => s.color === "#ff0000" && s.part === "head");
+  log("TEST", `C nhận paintHistoryBatch chứa nét của A = ${!!catchUpOk}`);
+  roomC.leave();
 
   // --- Test 4: pose ---
   roomA.send("pose", { pose: "crouch" });
@@ -73,11 +99,12 @@ async function run() {
 
   console.log("\n=== KẾT QUẢ SMOKE TEST ===");
   console.log((moveOk ? "✅" : "❌") + " Đồng bộ vị trí (Giai đoạn 1)");
-  console.log((paintOk ? "✅" : "❌") + " Tô màu đúng player, không lộ chéo (Giai đoạn 2)");
-  console.log((validateOk ? "✅" : "❌") + " Server từ chối input rác (Giai đoạn 2)");
+  console.log((paintOk ? "✅" : "❌") + " Vẽ tự do: broadcast đúng, không tự nhận lại nét mình (Giai đoạn UV-paint)");
+  console.log((validateOk ? "✅" : "❌") + " Server từ chối input rác (không broadcast gì)");
+  console.log((catchUpOk ? "✅" : "❌") + " Client mới vào nhận lại lịch sử nét vẽ (catch-up)");
   console.log((poseOk ? "✅" : "❌") + " Đồng bộ pose (Giai đoạn 2)");
 
-  const ok = moveOk && paintOk && validateOk && poseOk;
+  const ok = moveOk && paintOk && validateOk && catchUpOk && poseOk;
 
   roomA.leave();
   roomB.leave();

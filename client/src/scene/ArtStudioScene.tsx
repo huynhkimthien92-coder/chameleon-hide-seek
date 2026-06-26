@@ -47,10 +47,15 @@ export function ArtStudioScene() {
       />
       <pointLight position={[8, 4, 5]} intensity={25} distance={14} decay={2} />
 
-      {/* Sàn — hút màu được */}
-      <RigidBody type="fixed" colliders="trimesh">
-        <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} userData={{ pickable: true }}>
-          <planeGeometry args={[40, 40]} />
+      {/* Sàn — hút màu được.
+          QUAN TRỌNG: dùng box mỏng + collider "cuboid", KHÔNG dùng plane +
+          "trimesh" — trimesh nổi tiếng không ổn định khi có vật thể động
+          (player) đứng/di chuyển liên tục trên nó (dễ giật/lún/kẹt ở đường
+          nối tam giác). Mọi khối màu khác trong scene đều dùng cuboid nên ổn,
+          chỉ riêng sàn cũ bị vì dùng trimesh — đã sửa. */}
+      <RigidBody type="fixed" colliders="cuboid">
+        <mesh receiveShadow position={[0, -0.1, 0]} userData={{ pickable: true }}>
+          <boxGeometry args={[40, 0.2, 40]} />
           <meshStandardMaterial map={floor.texture} />
         </mesh>
       </RigidBody>

@@ -1,8 +1,7 @@
 import { create } from "zustand";
 import type { Pose } from "../scene/poseTransform";
-import type { MannequinColors } from "../scene/Mannequin";
+import type { BodyPart } from "../scene/paintRegistry";
 
-export type BodyPart = "head" | "torso" | "arms" | "legs";
 export type Team = "seeker" | "hider";
 export type MatchPhase = "lobby" | "playing" | "ended";
 
@@ -15,7 +14,6 @@ export type RemotePlayerState = {
   team: Team;
   pose: Pose;
   eliminated: boolean;
-  colors: MannequinColors;
 };
 
 export type ConnectionStatus = "idle" | "connecting" | "connected" | "error";
@@ -36,16 +34,20 @@ type GameStore = {
   winner: Team | "";
   playerCount: number; // để hiện "đang chờ x/6" ở lobby
 
-  // Giai đoạn 2 — Color Picker
-  hoverColor: string | null; // màu đang nhìn thấy qua crosshair (chưa chọn)
-  pickedColor: string | null; // màu đã "hút" — chờ áp dụng
-  selectedPart: BodyPart; // bộ phận sẽ được áp màu khi nhấn "Áp dụng"
-  localColors: MannequinColors; // màu hiện tại của mannequin local player
+  // Vị trí nhân vật hiện tại — dùng để tính tầm hút màu/bắn/vẽ theo NHÂN VẬT,
+  // không phải theo camera (camera lùi xa nhân vật ở third-person).
+  localPosition: { x: number; y: number; z: number };
 
-  // Giai đoạn 2 — Pose System
+  // Color Picker — hút màu từ môi trường, "cầm" 1 màu để vẽ lên người (tự do,
+  // không chia ô đầu/thân/tay/chân — người chơi tự chọn vị trí bằng cách
+  // nhắm trực tiếp, xem useInteraction.ts + paintRegistry.ts).
+  hoverColor: string | null; // màu đang nhìn thấy qua crosshair (chưa chọn)
+  heldColor: string | null; // màu đang "cầm" sau khi hút — dùng để vẽ
+
+  // Pose System
   localPose: Pose;
 
-  // Giai đoạn 3 — Combat: phản hồi crosshair khi team = seeker
+  // Combat: phản hồi crosshair khi team = seeker
   aimTargetSessionId: string | null;
   aimTargetValid: boolean; // đang ngắm 1 Hider còn sống, trong tầm
 
@@ -63,17 +65,17 @@ type GameStore = {
   setWinner: (winner: Team | "") => void;
   setPlayerCount: (count: number) => void;
 
+  setLocalPosition: (pos: { x: number; y: number; z: number }) => void;
+
   setHoverColor: (color: string | null) => void;
-  setPickedColor: (color: string | null) => void;
-  setSelectedPart: (part: BodyPart) => void;
-  applyPickedColorToLocal: () => void;
+  setHeldColor: (color: string | null) => void;
 
   setLocalPose: (pose: Pose) => void;
 
   setAimTarget: (sessionId: string | null, valid: boolean) => void;
 };
 
-export const useGameStore = create<GameStore>((set, get) => ({
+export const useGameStore = create<GameStore>((set) => ({
   connectionStatus: "idle",
   sessionId: null,
   remotePlayers: {},
@@ -87,10 +89,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   winner: "",
   playerCount: 0,
 
+  localPosition: { x: 0, y: 1, z: 0 },
+
   hoverColor: null,
-  pickedColor: null,
-  selectedPart: "torso",
-  localColors: { head: "#ffffff", torso: "#ffffff", arms: "#ffffff", legs: "#ffffff" },
+  heldColor: null,
 
   localPose: "idle",
 
@@ -119,16 +121,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setWinner: (winner) => set({ winner }),
   setPlayerCount: (count) => set({ playerCount: count }),
 
+  setLocalPosition: (pos) => set({ localPosition: pos }),
+
   setHoverColor: (color) => set({ hoverColor: color }),
-  setPickedColor: (color) => set({ pickedColor: color }),
-  setSelectedPart: (part) => set({ selectedPart: part }),
-  applyPickedColorToLocal: () => {
-    const { pickedColor, selectedPart, localColors } = get();
-    if (!pickedColor) return;
-    set({ localColors: { ...localColors, [selectedPart]: pickedColor } });
-  },
+  setHeldColor: (color) => set({ heldColor: color }),
 
   setLocalPose: (pose) => set({ localPose: pose }),
 
   setAimTarget: (sessionId, valid) => set({ aimTargetSessionId: sessionId, aimTargetValid: valid }),
 }));
+
+export type { BodyPart };

@@ -6,7 +6,7 @@
 
 **Yêu cầu bắt buộc:**
 - Tách thành **ít nhất 4 phần riêng** (Đầu / Thân / Tay / Chân) — mỗi phần là 1 object hoặc 1 material slot riêng trong Blender.
-- **Không cần UV map** cho việc tô màu — code hiện tại tô màu bằng cách đổi `material.color` (1 màu phẳng/tint trên từng phần), không phải vẽ texture lên người. UV chỉ cần nếu sau này muốn thêm chi tiết bề mặt (vải, vân da...) độc lập với màu tô — không bắt buộc cho MVP.
+- **CẦN UV map đẹp** (đã đổi từ "không cần" — xem cập nhật bên dưới) — cơ chế tô màu giờ là **vẽ tự do** (paint trực tiếp lên người ở bất kỳ vị trí, không chia ô cố định), cần UV để biết điểm nhắm trúng tương ứng pixel nào trên canvas vẽ. Nếu làm trong Blender, UV unwrap chuẩn (Smart UV Project hoặc seam thủ công) sẽ cho kết quả đẹp hơn nhiều so với cách mình tự tính UV bằng công thức xấp xỉ (cylindrical/spherical) cho asset hiện tại — asset hiện tại UV còn méo nhẹ ở vài chỗ (nách, bẹn) vì là tính tay, không phải unwrap thật.
 
 **Về tư thế (pose) — 2 lựa chọn, chọn theo trình độ Blender của bạn:**
 

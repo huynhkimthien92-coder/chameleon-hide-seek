@@ -27,9 +27,9 @@ export function Player() {
   const keys = useRef<Record<string, boolean>>({});
   const { camera, gl } = useThree();
 
-  const localColors = useGameStore((s) => s.localColors);
   const localPose = useGameStore((s) => s.localPose);
   const team = useGameStore((s) => s.team);
+  const sessionId = useGameStore((s) => s.sessionId);
 
   // Mặc định góc nhìn theo team khi server gán xong (vision.md: First person
   // cho Seeker, Third person cho Hider) — vẫn cho phép "V" đổi tay vì tiện
@@ -47,7 +47,7 @@ export function Player() {
       if (document.pointerLockElement !== canvas) return;
       yaw.current -= e.movementX * MOUSE_SENSITIVITY;
       pitch.current -= e.movementY * MOUSE_SENSITIVITY;
-      pitch.current = THREE.MathUtils.clamp(pitch.current, -Math.PI / 3, Math.PI / 3);
+      pitch.current = THREE.MathUtils.clamp(pitch.current, -1.3, 1.3);
     };
     const onKeyDown = (e: KeyboardEvent) => {
       keys.current[e.code] = true;
@@ -116,14 +116,20 @@ export function Player() {
       camera.position.set(pos.x, pos.y + 0.6, pos.z);
       camera.rotation.set(pitch.current, yaw.current, 0, "YXZ");
     } else {
+      // Orbit quanh điểm nhìn cố định (ngực nhân vật) theo cả yaw VÀ pitch —
+      // trước đây pitch không có tác dụng gì ở third-person (camera khoá cứng
+      // nhìn ngực), khiến không thể nhắm lên đầu/xuống chân chính mình để vẽ.
       const distance = 5;
-      const camX = pos.x - Math.sin(yaw.current) * distance;
-      const camZ = pos.z - Math.cos(yaw.current) * distance;
-      camera.position.set(camX, pos.y + 2.5, camZ);
+      const horizontalDist = distance * Math.cos(pitch.current);
+      const verticalOffset = distance * Math.sin(pitch.current);
+      const camX = pos.x - Math.sin(yaw.current) * horizontalDist;
+      const camZ = pos.z - Math.cos(yaw.current) * horizontalDist;
+      camera.position.set(camX, pos.y + 0.8 + verticalOffset, camZ);
       camera.lookAt(pos.x, pos.y + 0.8, pos.z);
     }
 
     sendLocalTransform(pos.x, pos.y, pos.z, yaw.current);
+    useGameStore.getState().setLocalPosition({ x: pos.x, y: pos.y, z: pos.z });
   });
 
   const pose = getPoseOffset(localPose);
@@ -143,7 +149,7 @@ export function Player() {
         position={[0, pose.posY, 0]}
         scale={[1, pose.scaleY, 1]}
       >
-        <Mannequin colors={localColors} />
+        <Mannequin sessionId={sessionId ?? "local-pending"} />
       </group>
     </RigidBody>
   );
