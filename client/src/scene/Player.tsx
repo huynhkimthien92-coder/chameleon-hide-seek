@@ -177,9 +177,9 @@ export function Player() {
     const controller = controllerRef.current;
     if (!body || !collider || !controller) return;
 
-    // [DEBUG TẠM #3] in info RAW của collider capsule + TOÀN BỘ collider
-    // trong world — đúng 1 lần. Đọc handle/isSensor/collisionGroups trực
-    // tiếp từ object Rapier thật, không suy đoán qua API cấp cao.
+    // [DEBUG TẠM #3] đọc info RAW của collider capsule + TOÀN BỘ collider
+    // trong world — đúng 1 lần. Lưu vào window.__colliderDebug (giống
+    // __frameLog) để gõ lệnh lấy lại, không phải dò cuộn console.
     if (!loggedColliderInfoRef.current) {
       loggedColliderInfoRef.current = true;
       try {
@@ -188,11 +188,11 @@ export function Player() {
           isSensor?: () => boolean;
           collisionGroups?: () => number;
         };
-        console.log("[DEBUG] CAPSULE collider:", {
+        const capsuleInfo = {
           handle: c.handle,
           isSensor: c.isSensor?.(),
           collisionGroups: c.collisionGroups?.()?.toString(16),
-        });
+        };
         type RawCollider = {
           handle: number;
           isSensor?: () => boolean;
@@ -212,9 +212,14 @@ export function Player() {
             });
           }
         );
-        console.log("[DEBUG] TẤT CẢ collider trong world:", all);
+        (window as unknown as { __colliderDebug?: unknown }).__colliderDebug = {
+          capsule: capsuleInfo,
+          all,
+        };
+        console.log("[DEBUG] window.__colliderDebug đã sẵn sàng — gõ: window.__colliderDebug");
       } catch (err) {
-        console.log("[DEBUG] Lỗi khi đọc collider info:", err);
+        (window as unknown as { __colliderDebug?: unknown }).__colliderDebug = { error: String(err) };
+        console.log("[DEBUG] Lỗi khi đọc collider info (đã lưu vào window.__colliderDebug.error):", err);
       }
     }
 
