@@ -11,6 +11,17 @@ const MOVE_SPEED = 4.5;
 const MOUSE_SENSITIVITY = 0.0025;
 const GRAVITY = 18; // khớp Physics gravity={[0,-18,0]} trong App.tsx
 const MAX_FALL_SPEED = 12; // chặn vận tốc rơi tối đa — tránh tăng vô hạn khi rơi xa/lâu
+// CHẶN delta tối đa mỗi frame — ROOT CAUSE của bug "rơi xuyên sàn": frame đầu
+// tiên sau khi asset (texture/GLTF) tải xong có delta ~330-360ms (so với
+// ~16ms bình thường). Với delta đó, desiredMovement.y một bước đã -2 đến
+// -2.4 unit — vượt thẳng qua bề dày sàn (0.2 unit) TRƯỚC KHI collider của
+// sàn kịp được đăng ký vào world (xác nhận qua debug: forEachCollider lúc
+// frame 0 chỉ thấy 1 collider — chính capsule, sàn chưa có). Sau cú nhảy
+// đó nhân vật đã ở dưới vị trí sàn, gravity chỉ kéo 1 chiều nên không bao
+// giờ quay lại chạm sàn được nữa -> rơi vô tận. Clamp delta để mỗi bước di
+// chuyển luôn nhỏ, không thể "nhảy cóc" qua bất kỳ vật cản mỏng nào, dù
+// máy giật cỡ nào (asset load, GC, tab background...).
+const MAX_DELTA = 1 / 30;
 
 // Tham số KCC — xem README mục KCC để biết lý do đổi từ RigidBody động sang
 // Character Controller (auto-step leo bậc thang, snap-to-ground chống rung/kẹt).
@@ -171,7 +182,9 @@ export function Player() {
     };
   }, [gl]);
 
-  useFrame((_state, delta) => {
+  useFrame((_state, rawDelta) => {
+    // Clamp delta — xem giải thích đầy đủ ở khai báo MAX_DELTA phía trên.
+    const delta = Math.min(rawDelta, MAX_DELTA);
     const body = bodyRef.current;
     const collider = colliderRef.current;
     const controller = controllerRef.current;
@@ -307,6 +320,8 @@ export function Player() {
     // [DEBUG TẠM #2] log 40 frame đầu (~0.66s) — đủ để thấy lúc đáy capsule
     // chạm/đáng-ra-phải-chạm sàn (y: 1.0 -> 0.75).
     if (frameLogRef.current.length < 40) {
+      let colliderCount = -1;
+      try { colliderCount = world.colliders.len(); } catch { /* noop */ }
       frameLogRef.current.push({
         frame: frameLogRef.current.length,
         bodyY: +current.y.toFixed(4),
@@ -314,6 +329,7 @@ export function Player() {
         desiredY: +desiredMovement.y.toFixed(4),
         correctedY: +corrected.y.toFixed(4),
         grounded,
+        colliderCount,
         deltaMs: +(delta * 1000).toFixed(2),
       });
       if (frameLogRef.current.length === 40) {
