@@ -3,37 +3,52 @@ import type { Pose } from "./poseTransform";
 
 /**
  * Pose bằng xương thật (Mannequin v3, rig Mixamo 22 bone) — thay cho cách
- * "xoay/scale cả khối" cũ. Các quaternion dưới đây đã được TÍNH + VERIFY
- * NGOẠI TUYẾN bằng script Node.js riêng (không chạy trong app thật):
- *   1. Lấy world bind quaternion THẬT của từng xương từ `inverseBindMatrices`
- *      (nguồn dữ liệu chính xác cho skinning — KHÔNG dùng cây node thông
- *      thường, vì rig này có node phụ "_$AssimpFbx$_PreRotation" do assimp
- *      sinh ra khi convert FBX, làm cây node thường tính sai world rotation).
- *   2. Với mỗi pose, chọn 1 góc xoay mong muốn THEO TRỤC WORLD thật (đã xác
- *      định bằng cách đo hướng ngón chân — trục X dương = phía trước nhân
- *      vật), áp lên world quat bind, quy đổi lại về local quat (theo parent).
- *   3. Verify lại bằng cách tính world position của đầu/gối/chân SAU khi áp
- *      pose — xác nhận: idle hạ tay đúng xuống 2 bên (không bay lên), crouch
- *      hạ đầu ~0.26 unit (cả người ngồi xuống rõ) mà CHÂN GẦN NHƯ GIỮ NGUYÊN
- *      vị trí cũ (lệch <0.003 unit — không trượt sàn).
+ * "xoay/scale cả khối" cũ.
  *
- * Vì đã gắn cứng kết quả NGOÀI app (không tính lại lúc chạy), rủi ro chỉ còn
- * ở "có đúng như mắt nhìn ngoài đời không" — phần này CHƯA test được trên
- * browser thật, cần người dùng test kỹ sau khi deploy.
+ * ⚠️ LỊCH SỬ BUG QUAN TRỌNG (test thật trên deploy phát hiện): bộ quaternion
+ * đầu tiên tính sai do dùng nhầm parent (bone mixamorig cha kế tiếp, vd
+ * LeftShoulder) thay vì parent THẬT trong file (node "_$AssimpFbx$_PreRotation"
+ * do assimp sinh ra khi convert FBX) — gây ra hiện tượng "người lộn ngược"
+ * ngay khi vào game. Đã sửa bằng công thức đúng (xem chi tiết bên dưới) và
+ * verify lại bằng cách tính world position của tay/chân sau pose — khớp
+ * với lần verify trước (world effect đúng như tính toán ban đầu), chỉ riêng
+ * giá trị LOCAL quaternion gán vào bone là khác (vì parent dùng để quy đổi
+ * khác nhau).
+ *
+ * Cách tính (NGOÀI app, không chạy trong code thật):
+ *   1. Lấy world bind quaternion THẬT của từng xương từ `inverseBindMatrices`
+ *      (nguồn dữ liệu chính xác cho skinning).
+ *   2. Mỗi bone có local rotation = identity ở bind pose (verify qua dữ liệu
+ *      thật) -> world quat của PARENT THẬT (PreRotation) == world quat bind
+ *      của CHÍNH bone đó. Quy đổi 1 delta xoay theo world thành local quat:
+ *      `local = bindWorldQuat^-1 * delta * bindWorldQuat` (phép conjugate).
+ *   3. Verify lại bằng cách tính world position đầu/gối/chân SAU khi áp pose.
  */
 
 type BoneQuat = [number, number, number, number];
 
+/**
+ * ⚠️ CẬP NHẬT QUAN TRỌNG: bộ giá trị ban đầu (gửi lần trước) SAI — đã gây
+ * lỗi "người lộn ngược" khi test thật. Nguyên nhân: tính "local quaternion"
+ * theo parent là bone mixamorig cha kế tiếp (vd LeftShoulder), nhưng PARENT
+ * THẬT của mỗi bone trong file là node "_$AssimpFbx$_PreRotation" do assimp
+ * sinh ra khi convert FBX — một node HOÀN TOÀN KHÁC, có rotation riêng.
+ * Công thức ĐÚNG (đã verify lại bằng cách tính world position thật, khớp
+ * với lần verify trước — chỉ local quaternion khác, world effect vẫn đúng
+ * như mong đợi): vì mỗi bone có local rotation = identity ở bind pose, world
+ * quat của parent thật (PreRotation) CHÍNH LÀ world quat bind của bone đó —
+ * dùng trực tiếp giá trị này làm "parent" khi quy đổi world delta -> local.
+ */
 const ARM_DOWN: Record<string, BoneQuat> = {
-  "mixamorig:LeftArm": [0.5581145818676403, 0.008466174479763921, -0.010164967528005091, 0.8296584302229284],
-  "mixamorig:RightArm": [0.5568784583062167, 0.03930192534224049, 0.015282263234828798, 0.8295228711550278],
+  "mixamorig:LeftArm": [0.7056628152892349, -0.005214551696736329, -0.0448642348513518, 0.7071067811866354],
+  "mixamorig:RightArm": [0.705280000414085, 0.03955743212710268, 0.031864252369933774, 0.7071067811863192],
 };
 
 const LEG_BEND: Record<string, BoneQuat> = {
-  "mixamorig:LeftUpLeg": [0.2782060133972691, 0.6754152837401545, -0.6125313961404322, 0.302027974492214],
-  "mixamorig:RightUpLeg": [-0.302610757912947, -0.6122436910204321, 0.6751502212147019, -0.2788486521338702],
-  "mixamorig:LeftLeg": [0.0202379173748492, 0.04198099772874507, -0.759993979645329, 0.6482570273733834],
-  "mixamorig:RightLeg": [-0.01971751532249577, -0.04186013358472743, -0.7643453166338391, 0.6431447625479112],
+  "mixamorig:LeftUpLeg": [-0.0022218420893521107, -0.03628351954185588, 0.3809529879709767, 0.9238795325425244],
+  "mixamorig:RightUpLeg": [0.0022908974821386208, 0.03627922517636975, 0.3809529879350891, 0.9238795325132338],
+  "mixamorig:LeftLeg": [-0.006631900244705002, 0.020040622738657893, -0.7067916181923193, 0.707106781333291],
+  "mixamorig:RightLeg": [0.007405547429984949, -0.020015866192053422, -0.7067846368033783, 0.7071067810829137],
 };
 
 /** Hips dịch theo trục Z RIÊNG của xương (chưa qua wrapper xoay Y-up của

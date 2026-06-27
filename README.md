@@ -154,6 +154,13 @@ Vì mesh giờ liền 1 khối có UV thật tốt, không cần chia 4 phần n
 ### Thu nhỏ kích thước (theo yêu cầu)
 Cao 1.8 → **1.5** unit. Đồng bộ theo đúng tỉ lệ (1.5/1.8≈0.833): `CapsuleCollider` (0.5,0.4)→(0.42,0.33), `CAPSULE_GROUND_OFFSET` (-0.9)→(-0.75), các offset camera (eye/chest height) cũng nhân theo tỉ lệ này.
 
+### 🔴 Bug thật phát hiện khi test live (sau khi gửi bản đầu) — đã sửa
+Test thật trên deploy: nhân vật hiện ra **lộn ngược hoàn toàn** (đầu ở dưới, chân chổng lên) ngay khi vào game, không cần bấm gì. Nguyên nhân xác định được: công thức tính "local quaternion" ban đầu dùng nhầm parent — lấy bone mixamorig cha kế tiếp (vd "LeftShoulder" cho "LeftArm"), nhưng **parent THẬT trong file là node "_$AssimpFbx$_PreRotation"** mà assimp tự sinh ra khi convert FBX (1 node hoàn toàn khác, có rotation riêng — xem `poseBones.ts` để rõ chi tiết). Vì SAI parent ở cả 6 xương (2 tay + 4 chân), sai số cộng dồn đủ lớn để nhìn như lộn ngược, không chỉ lệch nhẹ.
+
+**Đã sửa**: nhận ra mỗi bone có local rotation = identity ở bind pose → world quat của parent thật CHÍNH LÀ world quat bind của bone đó → công thức đúng: `local = bindWorldQuat⁻¹ · delta · bindWorldQuat` (phép conjugate, không cần biết parent thật là node nào). Verify lại: world position tay/chân sau pose vẫn khớp với lần verify trước (world effect đúng ngay từ đầu, chỉ riêng giá trị local quaternion gán vào bone là sai).
+
+⚠️ Vẫn **chưa thấy kết quả trên browser thật** sau khi sửa — đã làm hết mức để tự tin (tìm ra cơ chế lỗi cụ thể, không phải đoán mò, verify lại bằng toán). Nếu vẫn còn lệch, hướng dự phòng an toàn: rollback về `mannequin_v2_static_backup.glb` (mesh tĩnh, không xương, dùng cách xoay cả khối cũ — đã chạy ổn định trước đó).
+
 ### ⚠️ Rủi ro còn lại — CẦN TEST KỸ
 Đã verify số liệu rất kỹ (toán học, không chỉ "nhìn có vẻ đúng"), nhưng **chưa thấy được kết quả thật trên browser** — không loại trừ hoàn toàn khả năng có gì đó nhìn chưa tự nhiên (vd: vai/khuỷu tay hơi méo ở 1 góc nhìn cụ thể, dù world-position các khớp chính đã đúng). Test sau khi deploy: đổi qua idle/crouch nhiều lần liên tục (xem có bug hình ảnh không), nhìn từ nhiều góc camera, đặc biệt để ý vùng vai/hông là nơi dễ lộ lỗi nhất nếu có. Có gì bất thường, chụp ảnh gửi lại — đã giữ `mannequin_v1_old_backup.glb` và `mannequin_v2_static_backup.glb` để rollback nhanh nếu cần.
 
