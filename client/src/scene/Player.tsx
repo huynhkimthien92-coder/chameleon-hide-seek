@@ -10,13 +10,13 @@ import { getPoseOffset, CAPSULE_GROUND_OFFSET } from "./poseTransform";
 const MOVE_SPEED = 4.5;
 const MOUSE_SENSITIVITY = 0.0025;
 const GRAVITY = 18; // khớp Physics gravity={[0,-18,0]} trong App.tsx
-const MAX_FALL_SPEED = 30; // chặn vận tốc rơi tối đa — tránh tăng vô hạn khi rơi xa/lâu
+const MAX_FALL_SPEED = 12; // chặn vận tốc rơi tối đa — tránh tăng vô hạn khi rơi xa/lâu
 
 // Tham số KCC — xem README mục KCC để biết lý do đổi từ RigidBody động sang
 // Character Controller (auto-step leo bậc thang, snap-to-ground chống rung/kẹt).
 const AUTOSTEP_MAX_HEIGHT = 0.4; // > 0.22 (chiều cao mỗi bậc thang trong MapProps.tsx)
 const AUTOSTEP_MIN_WIDTH = 0.2;
-const SNAP_TO_GROUND_DISTANCE = 0.2;
+const SNAP_TO_GROUND_DISTANCE = 0.5;
 const MAX_SLOPE_CLIMB_ANGLE = (60 * Math.PI) / 180;
 const MIN_SLOPE_SLIDE_ANGLE = (50 * Math.PI) / 180;
 
