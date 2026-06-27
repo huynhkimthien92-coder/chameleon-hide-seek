@@ -322,11 +322,17 @@ export function Player() {
       let hipsToHeadDir = "n/a";
       const grp = mannequinGroupRef.current;
       if (grp) {
-        let sm: THREE.SkinnedMesh | null = null;
-        grp.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) sm = o as THREE.SkinnedMesh; });
-        if (sm?.skeleton) {
-          const hips = sm.skeleton.bones.find((b) => b.name === "mixamorig:Hips");
-          const head = sm.skeleton.bones.find((b) => b.name === "mixamorig:Head");
+        const findSkinnedMesh = (root: THREE.Object3D): THREE.SkinnedMesh | null => {
+          let found: THREE.SkinnedMesh | null = null;
+          root.traverse((o) => {
+            if (!found && (o as THREE.SkinnedMesh).isSkinnedMesh) found = o as THREE.SkinnedMesh;
+          });
+          return found;
+        };
+        const sm = findSkinnedMesh(grp);
+        if (sm && sm.skeleton) {
+          const hips = sm.skeleton.bones.find((b: THREE.Bone) => b.name === "mixamorig:Hips");
+          const head = sm.skeleton.bones.find((b: THREE.Bone) => b.name === "mixamorig:Head");
           if (hips && head) {
             const hipsPos = hips.getWorldPosition(new THREE.Vector3());
             const headPos = head.getWorldPosition(new THREE.Vector3());
