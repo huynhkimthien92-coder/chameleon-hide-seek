@@ -48,6 +48,7 @@ export function RemotePlayer({ player }: { player: RemotePlayerState }) {
       const key = `__remoteDebug_${player.id}`;
       (window as unknown as Record<string, unknown>)[key] = {
         rawPoseFromServer: player.pose,
+        playerXYZ: { x: player.x, y: player.y, z: player.z },
         poseOffset: { rotX: pose.rotX, rotZ: pose.rotZ, posY: pose.posY, scaleY: pose.scaleY },
         outerGroupRotation: groupRef.current
           ? { x: groupRef.current.rotation.x, y: groupRef.current.rotation.y, z: groupRef.current.rotation.z }
