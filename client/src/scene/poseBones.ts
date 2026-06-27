@@ -47,15 +47,15 @@ type BoneQuat = [number, number, number, number];
  * sau nếu cần tay khép hơi vào trong thân).
  */
 const ARM_DOWN: Record<string, BoneQuat> = {
-  "mixamorig:LeftArm": [-0.0450304520949398, 6.40763483938933e-17, -0.7082792333398699, 0.7044947026086227],
-  "mixamorig:RightArm": [-0.032794693162463216, -2.42861286636753e-17, 0.7258759500129293, 0.6870433853063485],
+  "mixamorigLeftArm": [-0.0450304520949398, 6.40763483938933e-17, -0.7082792333398699, 0.7044947026086227],
+  "mixamorigRightArm": [-0.032794693162463216, -2.42861286636753e-17, 0.7258759500129293, 0.6870433853063485],
 };
 
 const LEG_BEND: Record<string, BoneQuat> = {
-  "mixamorig:LeftUpLeg": [-0.0022218420893521107, -0.03628351954185588, 0.3809529879709767, 0.9238795325425244],
-  "mixamorig:RightUpLeg": [0.0022908974821386208, 0.03627922517636975, 0.3809529879350891, 0.9238795325132338],
-  "mixamorig:LeftLeg": [-0.006631900244705002, 0.020040622738657893, -0.7067916181923193, 0.707106781333291],
-  "mixamorig:RightLeg": [0.007405547429984949, -0.020015866192053422, -0.7067846368033783, 0.7071067810829137],
+  "mixamorigLeftUpLeg": [-0.0022218420893521107, -0.03628351954185588, 0.3809529879709767, 0.9238795325425244],
+  "mixamorigRightUpLeg": [0.0022908974821386208, 0.03627922517636975, 0.3809529879350891, 0.9238795325132338],
+  "mixamorigLeftLeg": [-0.006631900244705002, 0.020040622738657893, -0.7067916181923193, 0.707106781333291],
+  "mixamorigRightLeg": [0.007405547429984949, -0.020015866192053422, -0.7067846368033783, 0.7071067810829137],
 };
 
 /** Hips dịch theo trục Z RIÊNG của xương (chưa qua wrapper xoay Y-up của
@@ -81,7 +81,7 @@ const legBindQuat = new WeakMap<THREE.Bone, THREE.Quaternion>();
 export function applyBonePose(bones: THREE.Bone[], pose: Pose) {
   const byName = new Map(bones.map((b) => [b.name, b]));
   const setQuat = (name: string, q: BoneQuat) => byName.get(name)?.quaternion.set(...q);
-  const hips = byName.get("mixamorig:Hips");
+  const hips = byName.get("mixamorigHips");
 
   // Luôn bắt đầu từ tay hạ xuống (idle) — lean/lay/freeze dùng chung dáng
   // tay này, chỉ riêng crouch mới cần thêm gập chân.
