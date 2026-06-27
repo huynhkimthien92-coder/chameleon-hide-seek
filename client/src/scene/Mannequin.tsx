@@ -63,7 +63,25 @@ export function Mannequin({
     skinnedMesh.skeleton.update();
   }, [skinnedMesh, pose]);
 
-  return <primitive ref={groupRef} object={cloned} />;
+  // ⚠️ FIX QUAN TRỌNG — bind pose THẬT của file mannequin.glb (kể cả không
+  // áp pose gì) tự nó nằm NGANG trong world sau khi qua node YUpFix: đã
+  // verify bằng forward-kinematics trên đúng node thật trong file (Hông ->
+  // Cột sống -> Cổ -> Đầu), hướng ra ~(0,-0.03,±1) — gần thuần trục Z/X,
+  // KHÔNG phải (0,1,0). Đây là lỗi nằm trong chính file asset (chuỗi
+  // PreRotation do assimp sinh ra khi convert FBX->glTF), không phải lỗi ở
+  // Player.tsx/RemotePlayer.tsx/poseBones.ts. Bù bằng đúng 1 phép xoay
+  // +90° quanh X ở NGOÀI CÙNG (trước cả YUpFix) — đã verify lại bằng FK,
+  // hướng Hông->Đầu sau khi bù ra ~(0,1,0.03), đúng người đứng thẳng.
+  // Đặt fix ở ĐÂY (trong Mannequin, lớp ngoài cùng) để áp dụng tự động cho
+  // CẢ Player.tsx (local) và RemotePlayer.tsx (người khác) — không cần sửa
+  // 2 nơi, không ảnh hưởng tới các giá trị ARM_DOWN/LEG_BEND trong
+  // poseBones.ts (chúng là quaternion LOCAL của xương, không phụ thuộc lớp
+  // bọc ngoài này).
+  return (
+    <group rotation={[Math.PI / 2, 0, 0]}>
+      <primitive ref={groupRef} object={cloned} />
+    </group>
+  );
 }
 
 /** Gọi khi 1 player rời phòng hẳn — KHÔNG gọi cho local player (cần giữ suốt session). */
