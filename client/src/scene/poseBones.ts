@@ -28,27 +28,17 @@ import type { Pose } from "./poseTransform";
 type BoneQuat = [number, number, number, number];
 
 /**
- * ⚠️ CẬP NHẬT LẦN 2 — bộ giá trị trước (lần "sửa parent đúng") vẫn SAI, dù
- * công thức quy đổi local<->world đã đúng. Phát hiện bằng cách tính lại
- * forward-kinematics THẬT trên đúng hierarchy của `mannequin.glb` (62 node,
- * gồm các node trung gian `_$AssimpFbx$_Translation`/`_PreRotation` do
- * assimp sinh ra) — không suy đoán: hướng vai->tay ở T-pose ra đúng [gần
- * như thuần X, Y~0] (khớp T-pose thật), nhưng SAU khi áp ARM_DOWN cũ, Y vẫn
- * ~0 — tức tay chỉ xoay NGANG sang hướng khác (X -> Z), không hề HẠ XUỐNG.
- * Đây là nguyên nhân tay luôn xoè ngang dù không đổi pose (bug "trục sai"
- * người dùng phát hiện được sau khi bug rơi xuyên sàn đã sửa xong).
- *
- * Giá trị MỚI: tính delta xoay world từ hướng tay T-pose thật (lấy từ FK
- * trên node thật) sang target world = thẳng xuống (0,-1,0), quy đổi qua
- * `local = bindWorldQuat^-1 * delta * bindWorldQuat` (đúng công thức cũ,
- * delta lần này đúng hướng) — ĐÃ VERIFY lại bằng FK: hướng vai->tay sau khi
- * áp ra đúng ~(0,-1,0) (sai lệch <4% trên X/Z, dư do project lên world
- * thẳng đứng tuyệt đối — đủ tốt cho "tay buông tự nhiên", có thể chỉnh tinh
- * sau nếu cần tay khép hơi vào trong thân).
+ * ⚠️ CẬP NHẬT LẦN 3 — sau khi phát hiện bind pose GỐC của file `.glb` tự nó
+ * nằm ngang trong world (xem Mannequin.tsx, đã thêm `<group rotation={[Math.PI/2,0,0]}>`
+ * để bù), MỌI quaternion world-target tính trước đó (bao gồm ARM_DOWN lần 2)
+ * đều SAI vì chuỗi ancestor đã đổi (`bindWorldQuat` của vai giờ có thêm phép
+ * xoay bù phía trên nó). Tính lại bằng đúng chuỗi MỚI (kể cả phép xoay bù),
+ * verify lại bằng FK: hướng vai->tay sau khi áp ra ~(0,-1,0) (sai lệch
+ * <5% trên X/Z) — đúng tay buông dọc thân.
  */
 const ARM_DOWN: Record<string, BoneQuat> = {
-  "mixamorigLeftArm": [-0.0450304520949398, 6.40763483938933e-17, -0.7082792333398699, 0.7044947026086227],
-  "mixamorigRightArm": [-0.032794693162463216, -2.42861286636753e-17, 0.7258759500129293, 0.6870433853063485],
+  "mixamorigLeftArm": [0.7172823261533293, -1.9428902930940242e-16, -0.0454268737374971, 0.6953002687548069],
+  "mixamorigRightArm": [0.7180281482448576, -1.5959455978986628e-16, 0.031106581306632155, 0.6953186024603935],
 };
 
 const LEG_BEND: Record<string, BoneQuat> = {
