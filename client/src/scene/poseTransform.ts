@@ -1,14 +1,18 @@
 export type Pose = "idle" | "crouch" | "lean" | "lay" | "freeze";
 
 /**
- * Offset đặt mannequin (feet tại local Y=0) đúng vào ĐÁY capsule, không phải
- * TÂM capsule. CapsuleCollider trong Player.tsx dùng args=[halfHeight=0.42,
- * radius=0.33] -> nửa chiều cao thật (tâm tới đáy) = 0.42+0.33 = 0.75 (khớp
- * chiều cao mannequin v3 = 1.5, xem README mục "điều chỉnh kích thước nhỏ
- * hơn" — trước đây 1.8/halfExtent 0.9, đã thu nhỏ theo tỉ lệ 1.5/1.8≈0.833).
- * Thiếu offset này, mannequin sẽ lơ lửng cách sàn đúng 0.75 unit.
+ * ⚠️ CẬP NHẬT — sau khi thêm phép xoay bù `<group rotation={[Math.PI/2,0,0]}>`
+ * trong Mannequin.tsx (bind pose gốc của file `.glb` tự nó nằm ngang, xem
+ * comment ở đó), mốc "feet tại local Y=0" KHÔNG còn đúng nữa — hình học đã
+ * xoay nên chân rơi vào vị trí Y khác. Tính lại bằng forward-kinematics
+ * THẬT trên xương `LeftToeBase`/`LeftToe_End` (đúng chuỗi mannequinGroupRef
+ * -> NEW_FIX -> YUpFix -> ... -> chân): toe_Y ≈ -0.9153 trong khung
+ * mannequinGroupRef. Để chân chạm đúng ĐÁY capsule (RigidBody-local Y=-0.75,
+ * theo CapsuleCollider halfHeight 0.42+radius 0.33), offset cần =
+ * -0.75 - toe_Y = -0.75 - (-0.9153) ≈ 0.1653 (LƯU Ý: đổi dấu hẳn so với giá
+ * trị cũ -0.75 — bình thường, vì hình học đã xoay hẳn 90°, không phải lỗi).
  */
-export const CAPSULE_GROUND_OFFSET = -0.75;
+export const CAPSULE_GROUND_OFFSET = 0.1653;
 
 export type PoseOffset = {
   scaleY: number;
