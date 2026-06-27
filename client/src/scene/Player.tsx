@@ -336,8 +336,8 @@ export function Player() {
           debugStep = `sm=ok(${sm.name || "noname"}),skeleton=${sm.skeleton ? "ok" : "MISSING"}`;
           if (sm.skeleton) {
             const boneNames = sm.skeleton.bones.map((b: THREE.Bone) => b.name);
-            const hips = sm.skeleton.bones.find((b: THREE.Bone) => b.name === "mixamorig:Hips");
-            const head = sm.skeleton.bones.find((b: THREE.Bone) => b.name === "mixamorig:Head");
+            const hips = sm.skeleton.bones.find((b: THREE.Bone) => b.name === "mixamorigHips");
+            const head = sm.skeleton.bones.find((b: THREE.Bone) => b.name === "mixamorigHead");
             debugStep = `bones=${boneNames.length},hips=${hips ? "found" : "MISSING"},head=${head ? "found" : "MISSING"}`;
             if (hips && head) {
               const hipsPos = hips.getWorldPosition(new THREE.Vector3());
