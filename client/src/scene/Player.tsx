@@ -161,7 +161,7 @@ export function Player() {
 
   useFrame((_state, delta) => {
     const body = bodyRef.current;
-    const collider = (colliderRef.current)?.raw?.();
+    const collider = colliderRef.current;
     const controller = controllerRef.current;
     if (!body || !collider || !controller) return;
 
@@ -243,6 +243,27 @@ export function Player() {
         `grounded    = ${grounded}\n` +
         `colliders   = ${colliderCount}\n` +
         `delta(ms)   = ${(delta * 1000).toFixed(1)}`;
+    }
+    // [DEBUG TẠM #2] ghi log TỪNG FRAME từ lúc spawn — bắt khoảnh khắc rơi qua sàn.
+    const frameLogRef = useRef<Record<string, number | boolean>[]>([]);
+    (window as unknown as { __frameLog?: typeof frameLogRef.current }).__frameLog = frameLogRef.current;
+    
+    // [DEBUG TẠM #2] log 40 frame đầu (~0.66s) — đủ để thấy lúc đáy capsule
+    // chạm/đáng-ra-phải-chạm sàn (y: 1.0 -> 0.75).
+    if (frameLogRef.current.length < 40) {
+      frameLogRef.current.push({
+        frame: frameLogRef.current.length,
+        bodyY: +current.y.toFixed(4),
+        vVel: +verticalVelocity.current.toFixed(4),
+        desiredY: +desiredMovement.y.toFixed(4),
+        correctedY: +corrected.y.toFixed(4),
+        grounded,
+        deltaMs: +(delta * 1000).toFixed(2),
+      });
+      if (frameLogRef.current.length === 40) {
+        console.log("=== FRAME LOG (40 frame đầu từ lúc spawn) ===");
+        console.table(frameLogRef.current);
+      }
     }
 
     // Mannequin chỉ hiện ở Third person, quay theo facingYaw (hướng thật),
