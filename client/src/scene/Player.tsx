@@ -57,6 +57,12 @@ export function Player() {
   const frameLogRef = useRef<Record<string, number | boolean>[]>([]);
   (window as unknown as { __frameLog?: typeof frameLogRef.current }).__frameLog = frameLogRef.current;
 
+  // [DEBUG TẠM #3] cờ chỉ in thông tin collider RAW (groups/sensor/handle)
+  // đúng 1 lần — phân biệt 3 khả năng: lệch collision group, sensor nhầm,
+  // hoặc 2 instance WASM Rapier khác nhau (xem README mục KCC, lỗi build
+  // 2 bản @dimforge/rapier3d-compat đã gặp trước đây — nghi runtime cũng dính).
+  const loggedColliderInfoRef = useRef(false);
+
   const localPose = useGameStore((s) => s.localPose);
   const team = useGameStore((s) => s.team);
   const sessionId = useGameStore((s) => s.sessionId);
@@ -170,6 +176,47 @@ export function Player() {
     const collider = colliderRef.current;
     const controller = controllerRef.current;
     if (!body || !collider || !controller) return;
+
+    // [DEBUG TẠM #3] in info RAW của collider capsule + TOÀN BỘ collider
+    // trong world — đúng 1 lần. Đọc handle/isSensor/collisionGroups trực
+    // tiếp từ object Rapier thật, không suy đoán qua API cấp cao.
+    if (!loggedColliderInfoRef.current) {
+      loggedColliderInfoRef.current = true;
+      try {
+        const c = collider as unknown as {
+          handle: number;
+          isSensor?: () => boolean;
+          collisionGroups?: () => number;
+        };
+        console.log("[DEBUG] CAPSULE collider:", {
+          handle: c.handle,
+          isSensor: c.isSensor?.(),
+          collisionGroups: c.collisionGroups?.()?.toString(16),
+        });
+        type RawCollider = {
+          handle: number;
+          isSensor?: () => boolean;
+          collisionGroups?: () => number;
+          translation?: () => { x: number; y: number; z: number };
+          halfExtents?: () => { x: number; y: number; z: number };
+        };
+        const all: Record<string, unknown>[] = [];
+        (world as unknown as { forEachCollider: (cb: (col: RawCollider) => void) => void }).forEachCollider(
+          (col) => {
+            all.push({
+              handle: col.handle,
+              isSensor: col.isSensor?.(),
+              collisionGroups: col.collisionGroups?.()?.toString(16),
+              translation: col.translation?.(),
+              halfExtents: col.halfExtents?.(),
+            });
+          }
+        );
+        console.log("[DEBUG] TẤT CẢ collider trong world:", all);
+      } catch (err) {
+        console.log("[DEBUG] Lỗi khi đọc collider info:", err);
+      }
+    }
 
     const eliminated = useGameStore.getState().eliminated;
 
