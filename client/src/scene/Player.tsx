@@ -314,21 +314,28 @@ export function Player() {
       // nằm ngang thì up ≈ (0,0,±1) hoặc (±1,0,0); lộn ngược thì up ≈ (0,-1,0).
       // Đây là số liệu CHƯA TỪNG đo (trước chỉ đo group/remote), quyết định
       // được mesh của CHÍNH MÌNH có thật sự bị xoay sai hay không.
-      let meshUp = "n/a";
-      let meshName = "n/a";
+      // [DEBUG TẠM #4 — SỬA LẠI] meshUp (rotate local+Y của SkinnedMesh node)
+      // SAI PHƯƠNG PHÁP — mesh có skin luôn ở local identity, không phản ánh
+      // tư thế thật. Đo đúng: hướng THẬT từ xương Hips -> Head trong world,
+      // qua đúng các bone trong skeleton.bones (đã skinning, world transform
+      // chuẩn). Standing thật: hướng này phải ~ (0, +1, 0).
+      let hipsToHeadDir = "n/a";
       const grp = mannequinGroupRef.current;
       if (grp) {
-        let sm: THREE.Object3D | null = null;
-        grp.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) sm = o; });
-        if (sm) {
-          const obj = sm as THREE.Object3D;
-          meshName = obj.name || "(no name)";
-          const wq = obj.getWorldQuaternion(new THREE.Quaternion());
-          const up = new THREE.Vector3(0, 1, 0).applyQuaternion(wq);
-          meshUp = `${up.x.toFixed(2)},${up.y.toFixed(2)},${up.z.toFixed(2)}`;
+        let sm: THREE.SkinnedMesh | null = null;
+        grp.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) sm = o as THREE.SkinnedMesh; });
+        if (sm?.skeleton) {
+          const hips = sm.skeleton.bones.find((b) => b.name === "mixamorig:Hips");
+          const head = sm.skeleton.bones.find((b) => b.name === "mixamorig:Head");
+          if (hips && head) {
+            const hipsPos = hips.getWorldPosition(new THREE.Vector3());
+            const headPos = head.getWorldPosition(new THREE.Vector3());
+            const dir = headPos.sub(hipsPos).normalize();
+            hipsToHeadDir = `${dir.x.toFixed(2)},${dir.y.toFixed(2)},${dir.z.toFixed(2)}`;
+          }
         }
       }
-      (window as unknown as Record<string, unknown>).__playerMeshDebug = { meshName, meshUp };
+      (window as unknown as Record<string, unknown>).__playerMeshDebug = { hipsToHeadDir };
 
       // [DEBUG TẠM #5] in TOÀN BỘ đường đi (name + local quaternion + local
       // position) từ group ngoài xuống tới SkinnedMesh — đúng 1 lần. Mục
@@ -367,7 +374,7 @@ export function Player() {
         `corrected.y = ${corrected.y.toFixed(4)}\n` +
         `grounded    = ${grounded}\n` +
         `colliders   = ${colliderCount}\n` +
-        `meshUp      = ${meshUp}\n` +
+        `meshUp      = ${hipsToHeadDir}\n` +
         `delta(ms)   = ${(delta * 1000).toFixed(1)}`;
     }
 
