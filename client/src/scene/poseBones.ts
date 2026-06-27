@@ -28,20 +28,27 @@ import type { Pose } from "./poseTransform";
 type BoneQuat = [number, number, number, number];
 
 /**
- * ⚠️ CẬP NHẬT QUAN TRỌNG: bộ giá trị ban đầu (gửi lần trước) SAI — đã gây
- * lỗi "người lộn ngược" khi test thật. Nguyên nhân: tính "local quaternion"
- * theo parent là bone mixamorig cha kế tiếp (vd LeftShoulder), nhưng PARENT
- * THẬT của mỗi bone trong file là node "_$AssimpFbx$_PreRotation" do assimp
- * sinh ra khi convert FBX — một node HOÀN TOÀN KHÁC, có rotation riêng.
- * Công thức ĐÚNG (đã verify lại bằng cách tính world position thật, khớp
- * với lần verify trước — chỉ local quaternion khác, world effect vẫn đúng
- * như mong đợi): vì mỗi bone có local rotation = identity ở bind pose, world
- * quat của parent thật (PreRotation) CHÍNH LÀ world quat bind của bone đó —
- * dùng trực tiếp giá trị này làm "parent" khi quy đổi world delta -> local.
+ * ⚠️ CẬP NHẬT LẦN 2 — bộ giá trị trước (lần "sửa parent đúng") vẫn SAI, dù
+ * công thức quy đổi local<->world đã đúng. Phát hiện bằng cách tính lại
+ * forward-kinematics THẬT trên đúng hierarchy của `mannequin.glb` (62 node,
+ * gồm các node trung gian `_$AssimpFbx$_Translation`/`_PreRotation` do
+ * assimp sinh ra) — không suy đoán: hướng vai->tay ở T-pose ra đúng [gần
+ * như thuần X, Y~0] (khớp T-pose thật), nhưng SAU khi áp ARM_DOWN cũ, Y vẫn
+ * ~0 — tức tay chỉ xoay NGANG sang hướng khác (X -> Z), không hề HẠ XUỐNG.
+ * Đây là nguyên nhân tay luôn xoè ngang dù không đổi pose (bug "trục sai"
+ * người dùng phát hiện được sau khi bug rơi xuyên sàn đã sửa xong).
+ *
+ * Giá trị MỚI: tính delta xoay world từ hướng tay T-pose thật (lấy từ FK
+ * trên node thật) sang target world = thẳng xuống (0,-1,0), quy đổi qua
+ * `local = bindWorldQuat^-1 * delta * bindWorldQuat` (đúng công thức cũ,
+ * delta lần này đúng hướng) — ĐÃ VERIFY lại bằng FK: hướng vai->tay sau khi
+ * áp ra đúng ~(0,-1,0) (sai lệch <4% trên X/Z, dư do project lên world
+ * thẳng đứng tuyệt đối — đủ tốt cho "tay buông tự nhiên", có thể chỉnh tinh
+ * sau nếu cần tay khép hơi vào trong thân).
  */
 const ARM_DOWN: Record<string, BoneQuat> = {
-  "mixamorig:LeftArm": [0.7056628152892349, -0.005214551696736329, -0.0448642348513518, 0.7071067811866354],
-  "mixamorig:RightArm": [0.705280000414085, 0.03955743212710268, 0.031864252369933774, 0.7071067811863192],
+  "mixamorig:LeftArm": [-0.0450304520949398, 6.40763483938933e-17, -0.7082792333398699, 0.7044947026086227],
+  "mixamorig:RightArm": [-0.032794693162463216, -2.42861286636753e-17, 0.7258759500129293, 0.6870433853063485],
 };
 
 const LEG_BEND: Record<string, BoneQuat> = {
