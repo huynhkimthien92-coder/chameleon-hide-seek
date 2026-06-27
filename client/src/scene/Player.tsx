@@ -161,7 +161,7 @@ export function Player() {
 
   useFrame((_state, delta) => {
     const body = bodyRef.current;
-    const collider = (colliderRef.current)?.raw();
+    const collider = (colliderRef.current)?.raw?.();
     const controller = controllerRef.current;
     if (!body || !collider || !controller) return;
 
