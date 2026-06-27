@@ -57,7 +57,7 @@ export function ArtStudioScene() {
           (player) đứng/di chuyển liên tục trên nó (dễ giật/lún/kẹt ở đường
           nối tam giác). Mọi khối màu khác trong scene đều dùng cuboid nên ổn,
           chỉ riêng sàn cũ bị vì dùng trimesh — đã sửa. */}
-      <RigidBody type="fixed" colliders="cuboid">
+      <RigidBody type="fixed" colliders="cuboid" collisionGroups={0x0001_ffff}>
         <mesh receiveShadow position={[0, -0.5, 0]} userData={{ pickable: true }}>
           <boxGeometry args={[40, 1, 40]} />
           <meshStandardMaterial map={floor.texture} />
