@@ -14,11 +14,10 @@ const ROOM_CAPACITY = 6; // khớp server (vision.md mục 3) — chỉ để hi
 
 function Crosshair() {
   const team = useGameStore((s) => s.team);
-  const hoverColor = useGameStore((s) => s.hoverColor);
   const aimTargetValid = useGameStore((s) => s.aimTargetValid);
   const isPainting = useGameStore((s) => s.isPainting);
 
-  if (isPainting) return null; // đang vẽ -> dùng con trỏ chuột thật, không cần crosshair giữa màn hình
+  if (isPainting) return null; // đang tô màu -> dùng con trỏ chuột thật, không cần crosshair giữa màn hình
 
   if (team === "seeker") {
     return (
@@ -29,13 +28,7 @@ function Crosshair() {
     );
   }
 
-  // Hider (hoặc chưa rõ team) — preview màu hút được từ môi trường
-  return (
-    <div
-      className="w-5 h-5 rounded-full border-2 border-white"
-      style={{ backgroundColor: hoverColor ?? "transparent" }}
-    />
-  );
+  return null; // Hider ngoài chế độ tô màu — không hút màu/vẽ được ở đây nữa, không cần hiện gì
 }
 
 export function HUD() {
@@ -71,13 +64,13 @@ export function HUD() {
         </div>
       )}
 
-      {/* Đang vẽ — nhân vật/camera đứng yên, di chuột để rê cọ */}
+      {/* Đang tô màu — nhân vật/camera đứng yên, di chuột để hút màu hoặc tô */}
       {isPainting && (
         <div
           className="absolute top-20 left-1/2 -translate-x-1/2 bg-accent text-white
                      font-display font-bold px-5 py-2 rounded-pill shadow-hard-accent"
         >
-          🖌️ Đang vẽ — giữ chuột trái để tô, Escape hoặc "Xong" để thoát
+          🎨 Đang tô màu — nhắm tường để hút màu, nhắm người để tô · Escape/"Xong" để thoát
         </div>
       )}
 
@@ -126,7 +119,7 @@ export function HUD() {
         <span>· {remoteCount} người chơi khác</span>
         <div className="text-xs opacity-60 basis-full mt-1">
           Click vào màn hình để bắt đầu · WASD di chuyển · V đổi góc nhìn ·{" "}
-          {team === "seeker" ? "Click trái để bắn" : "Click để hút màu · Bấm \"Cọ vẽ\" để tô lên người"}
+          {team === "seeker" ? "Click trái để bắn" : "Bấm \"Tô màu\" để hút màu + tô lên người"}
         </div>
       </div>
     </div>

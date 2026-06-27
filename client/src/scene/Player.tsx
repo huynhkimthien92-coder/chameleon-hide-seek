@@ -64,6 +64,8 @@ export function Player() {
     if (isPainting) {
       document.exitPointerLock();
       isFirstPerson.current = false;
+    } else {
+      useGameStore.getState().setHoverColor(null);
     }
   }, [isPainting]);
 
@@ -93,7 +95,14 @@ export function Player() {
   useEffect(() => {
     const canvas = gl.domElement;
 
-    const onClick = () => canvas.requestPointerLock();
+    const onClick = () => {
+      // Đang vẽ -> KHÔNG lock lại pointer. Trước đó thiếu điều kiện này: mỗi
+      // lần click để vẽ, trình duyệt cũng bắn sự kiện "click" trên canvas,
+      // handler này lock lại pointer ngay lập tức -> chuột quay về điều
+      // khiển camera dù đang ở chế độ vẽ (đúng bug người dùng báo).
+      if (useGameStore.getState().isPainting) return;
+      canvas.requestPointerLock();
+    };
     const onMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== canvas) return;
       yaw.current -= e.movementX * MOUSE_SENSITIVITY;

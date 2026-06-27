@@ -98,6 +98,19 @@ Không có ảnh sàn chuyên dụng sẵn — tái dùng 1 trong 2 ảnh grunge
 
 ⏳ **Đã cắt giảm theo yêu cầu**: Mobile/cảm ứng (tạm hoãn, ưu tiên chuột+bàn phím chuẩn trước) và UV unwrap thủ công bằng Blender (tiếp tục dùng script Node — Bảng vẽ hiện tại đã ổn định, không cần làm lại).
 
+## Vẽ tự do — ĐỔI LẦN 5: gộp hút màu vào chung chế độ đứng yên với vẽ
+
+Sau khi sửa bug lock-pointer, phát hiện thêm vấn đề tương tự: **hút màu vẫn dùng kiểu camera xoay-để-ngắm** (như lúc đi lại bình thường) — xoay camera để ngắm tường làm mất tương quan "người mình đứng đâu so với tường đó", rất khó so màu cho khớp (cùng bản chất vấn đề như lúc vẽ ở lần đổi 1, chỉ là chưa áp dụng fix cho bước hút màu).
+
+**Đã gộp**: nút bấm đổi từ "Cọ vẽ" thành **"Tô màu"** — vào chế độ này (camera đứng yên, chuột thật) thì **cả hút màu VÀ vẽ dùng chung 1 chế độ, không cần thoát/vào lại giữa 2 bước**:
+- Nhắm vào môi trường (tường, sàn...) → click để hút màu.
+- Nhắm vào người mình → giữ chuột trái để tô.
+- Cả 2 dùng chung con trỏ chuột thật, chung camera đứng yên — canh góc 1 lần (thấy cả người mình + tường cạnh đó) là so màu được luôn, không phải xoay qua xoay lại.
+
+Hệ quả: Hider không còn hút màu được NGOÀI chế độ "Tô màu" nữa (trước đây hút màu trong lúc đi lại bình thường, giờ phải bấm "Tô màu" trước) — đây là đánh đổi chủ ý để toàn bộ luồng tô màu nhất quán, không có 2 cách hút màu khác nhau gây nhầm lẫn.
+
+✅ **"Pick màu rồi nhưng không tô được, góc nhìn đổi khi di chuyển chuột"** — bug thật: click để vẽ cũng đồng thời bắn sự kiện DOM "click" trên canvas, mà handler có sẵn (`onClick` cho lúc chơi bình thường) **tự động lock lại pointer mỗi khi click vào canvas** — vô tình lock lại ngay trong lúc đang vẽ, khiến chuột quay về điều khiển camera. Đã thêm điều kiện chặn lock lại khi `isPainting=true`.
+
 ## Vẽ tự do — ĐỔI LẦN 4 (cuối): vẽ ngay trong thế giới game, bỏ hẳn khung 3D riêng
 
 **Vấn đề cốt lõi của bản "khung 3D riêng" (PaintBoard, lần 3)**: tách người chơi ra 1 khung xem riêng làm **mất hoàn toàn khả năng nhìn thấy môi trường xung quanh để so màu cho khớp** — đúng mục đích sống còn của camo trong game này. Lần đổi này quay lại vẽ NGAY TRONG THẾ GIỚI GAME, nhưng sửa đúng vấn đề đã gặp ở lần đổi đầu (camera/người xoay lộn xộn khi vẽ):

@@ -1,18 +1,21 @@
-import { Pipette, Paintbrush, X } from "lucide-react";
+import { Pipette, Palette, X } from "lucide-react";
 import { useGameStore } from "../store/useGameStore";
 import { sfx } from "../audio/sounds";
 
 /**
- * Hiện màu đang "cầm" (đã hút từ môi trường) + nút "Cọ vẽ" — bấm vào sẽ
- * CỐ ĐỊNH nhân vật + camera (đứng yên hẳn, không xoay theo chuột nữa), nhả
- * pointer-lock để chuột thật điều khiển con trỏ vẽ trực tiếp lên người NGAY
- * TRONG THẾ GIỚI GAME (xem useInteraction.ts) — giữ nguyên map/môi trường
- * xung quanh trong tầm nhìn để so màu cho khớp lúc vẽ. Bấm lại (hoặc Escape)
- * để thoát, quay lại điều khiển bình thường.
+ * Nút "Tô màu" — bấm vào sẽ CỐ ĐỊNH nhân vật + camera (đứng yên hẳn, không
+ * xoay theo chuột nữa), nhả pointer-lock để chuột thật điều khiển con trỏ.
+ * Trong chế độ này, GỘP CHUNG cả 2 việc — không cần thoát/vào lại giữa 2
+ * bước:
+ *   - Nhắm vào MÔI TRƯỜNG (tường, sàn...) -> hút màu (click để cầm màu đó).
+ *   - Nhắm vào NGƯỜI MÌNH -> vẽ (giữ chuột trái để tô liên tục).
+ * Vì camera đứng yên và KHÔNG tách scene riêng, môi trường xung quanh vẫn
+ * còn nguyên trong tầm nhìn suốt — so màu vừa hút với người mình ngay tại
+ * chỗ, không cần xoay qua xoay lại.
  *
- * Muốn vẽ mặt khác của người: thoát chế độ vẽ, tự xoay người (WASD/chuột)
- * cho mặt cần vẽ hướng ra camera, rồi vào vẽ lại — không xoay camera được
- * trong lúc vẽ (chủ ý, giống vẽ lên tranh, không phải xoay mô hình 3D).
+ * Bấm lại (hoặc Escape) để thoát, quay lại điều khiển bình thường.
+ * Muốn tô mặt khác của người (lưng, hông...): thoát, tự xoay người cho mặt
+ * cần tô hướng ra camera, vào lại.
  */
 export function ColorPickerUI() {
   const heldColor = useGameStore((s) => s.heldColor);
@@ -34,7 +37,7 @@ export function ColorPickerUI() {
         className="relative w-9 h-9 rounded-full border-2 border-ink/20 shrink-0
                    flex items-center justify-center"
         style={{ backgroundColor: heldColor ?? "#e5e5e5" }}
-        title={heldColor ?? "Chưa hút màu — click vào bề mặt môi trường để hút"}
+        title={heldColor ?? "Chưa cầm màu"}
       >
         <Pipette
           size={14}
@@ -43,12 +46,12 @@ export function ColorPickerUI() {
         />
       </div>
 
-      <div className="text-sm text-ink/70 max-w-[200px]">
+      <div className="text-sm text-ink/70 max-w-[220px]">
         {isPainting
-          ? "Đang vẽ — di chuột để rê cọ, giữ chuột trái để tô"
+          ? "Nhắm vào tường để hút màu · Nhắm vào người để tô"
           : heldColor
           ? "Đang cầm màu này"
-          : "Click vào môi trường để hút màu"}
+          : "Bấm \"Tô màu\" để bắt đầu"}
       </div>
 
       <button
@@ -57,8 +60,8 @@ export function ColorPickerUI() {
           active:translate-y-[2px] active:shadow-none
           ${isPainting ? "bg-primary text-white shadow-hard-primary" : "bg-accent text-white shadow-hard-accent"}`}
       >
-        {isPainting ? <X size={16} /> : <Paintbrush size={16} />}
-        {isPainting ? "Xong" : "Cọ vẽ"}
+        {isPainting ? <X size={16} /> : <Palette size={16} />}
+        {isPainting ? "Xong" : "Tô màu"}
       </button>
     </div>
   );

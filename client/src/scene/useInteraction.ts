@@ -23,15 +23,22 @@ function findPlayerSessionId(object: THREE.Object3D | null): string | null {
 }
 
 /**
- * Raycast liên tục. BÌNH THƯỜNG (không vẽ): từ giữa màn hình (crosshair,
- * pointer-lock kiểu FPS) — hút màu môi trường (Hider) hoặc ngắm bắn (Seeker).
+ * Raycast liên tục.
  *
- * CHẾ ĐỘ VẼ (isPainting=true, bấm nút "Cọ vẽ"): nhân vật + camera đứng yên
- * hẳn (xem Player.tsx), pointer-lock được nhả ra, raycast theo ĐÚNG VỊ TRÍ
- * CON TRỎ CHUỘT THẬT trên màn hình (không tích lũy delta) — vẽ trực tiếp lên
- * người NGAY TRONG THẾ GIỚI GAME, giữ nguyên map/môi trường xung quanh trong
- * tầm nhìn để so màu cho khớp — đây là điểm khác biệt cốt lõi so với cách
- * "khung 3D riêng" đã bỏ (xem README).
+ * BÌNH THƯỜNG (isPainting=false): từ giữa màn hình (crosshair, pointer-lock
+ * kiểu FPS) — chỉ dùng để Seeker ngắm bắn. Hider không hút màu được ở đây
+ * nữa (xem lý do dưới).
+ *
+ * CHẾ ĐỘ TÔ MÀU (isPainting=true, bấm nút "Tô màu"): nhân vật + camera đứng
+ * yên hẳn (xem Player.tsx), pointer-lock nhả ra, raycast theo ĐÚNG VỊ TRÍ
+ * CON TRỎ CHUỘT THẬT — GỘP CHUNG cả hút màu (nhắm vào môi trường) VÀ vẽ
+ * (nhắm vào người mình) trong CÙNG 1 chế độ đứng yên này. Lý do gộp: trước
+ * đây hút màu vẫn dùng camera xoay-để-ngắm như lúc đi lại bình thường —
+ * người dùng phản hồi đúng: xoay camera để ngắm tường làm mất tương quan
+ * "người mình đang ở đâu so với tường đó", rất khó so màu cho khớp. Gộp cả
+ * 2 việc vào chung chế độ đứng yên thì người chơi canh góc 1 lần (thấy cả
+ * người mình + tường cạnh đó), rồi hút màu + tô đều dùng đúng góc đó, không
+ * còn phải xoay qua xoay lại giữa 2 bước.
  */
 export function useInteraction() {
   const { camera, scene, gl } = useThree();
@@ -68,17 +75,22 @@ export function useInteraction() {
     const playerPos = useGameStore.getState().localPosition;
     const playerVec = new THREE.Vector3(playerPos.x, playerPos.y, playerPos.z);
 
-    // --- Chế độ vẽ: chỉ tìm body của chính mình, không làm gì khác ---
+    // --- Chế độ tô màu: GỘP hút màu (môi trường) + vẽ (người mình) ---
     if (isPainting) {
       const ownBodyHit = hits.find(
         (h) => h.object.userData?.isBodyPart && h.object.userData?.ownerSessionId === mySessionId && h.uv
       );
 
       if (ownBodyHit?.uv) {
+        // Đang nhắm vào người mình -> sẵn sàng vẽ, không hover môi trường nữa.
         if (!wasAimingOwnBody.current) {
           wasAimingOwnBody.current = true;
           setIsAimingOwnBody(true);
           gl.domElement.style.cursor = "pointer";
+        }
+        if (lastHover.current !== null) {
+          lastHover.current = null;
+          setHoverColor(null);
         }
         if (isMouseDown.current) {
           const heldColor = useGameStore.getState().heldColor;
@@ -90,14 +102,38 @@ export function useInteraction() {
             sendPaintStroke(part, ownBodyHit.uv.x, ownBodyHit.uv.y, heldColor, BRUSH_RADIUS);
           }
         }
-      } else if (wasAimingOwnBody.current) {
+        return;
+      }
+
+      if (wasAimingOwnBody.current) {
         wasAimingOwnBody.current = false;
         setIsAimingOwnBody(false);
         gl.domElement.style.cursor = "crosshair";
       }
+
+      // Không nhắm vào người mình -> thử hút màu môi trường (vẫn cùng con
+      // trỏ chuột thật, cùng camera đứng yên — không cần thoát chế độ).
+      const hit = hits.find((h) => h.object.userData?.pickable && h.uv);
+      const distanceFromPlayer = hit ? hit.point.distanceTo(playerVec) : Infinity;
+      let next: string | null = null;
+      if (hit?.uv && distanceFromPlayer <= PICK_RANGE) {
+        const mesh = hit.object as THREE.Mesh;
+        const material = mesh.material as THREE.MeshStandardMaterial;
+        const canvas = getSampleableCanvas(material.map);
+        if (canvas) {
+          const repeatX = material.map?.repeat.x ?? 1;
+          const repeatY = material.map?.repeat.y ?? 1;
+          next = sampleCanvasAtUV(canvas, hit.uv.x * repeatX, hit.uv.y * repeatY);
+        }
+      }
+      if (next !== lastHover.current) {
+        lastHover.current = next;
+        setHoverColor(next);
+      }
       return;
     }
 
+    // --- Ngoài chế độ tô màu: chỉ còn Seeker ngắm bắn ---
     if (team === "seeker") {
       const hit = hits.find((h) => findPlayerSessionId(h.object));
       const distanceFromPlayer = hit ? hit.point.distanceTo(playerVec) : Infinity;
@@ -106,26 +142,6 @@ export function useInteraction() {
       const remote = sessionId ? useGameStore.getState().remotePlayers[sessionId] : null;
       const valid = !!remote && remote.team === "hider" && !remote.eliminated;
       setAimTarget(sessionId, valid);
-      return;
-    }
-
-    // Hider — hút màu môi trường
-    const hit = hits.find((h) => h.object.userData?.pickable && h.uv);
-    const distanceFromPlayer = hit ? hit.point.distanceTo(playerVec) : Infinity;
-    let next: string | null = null;
-    if (hit?.uv && distanceFromPlayer <= PICK_RANGE) {
-      const mesh = hit.object as THREE.Mesh;
-      const material = mesh.material as THREE.MeshStandardMaterial;
-      const canvas = getSampleableCanvas(material.map);
-      if (canvas) {
-        const repeatX = material.map?.repeat.x ?? 1;
-        const repeatY = material.map?.repeat.y ?? 1;
-        next = sampleCanvasAtUV(canvas, hit.uv.x * repeatX, hit.uv.y * repeatY);
-      }
-    }
-    if (next !== lastHover.current) {
-      lastHover.current = next;
-      setHoverColor(next);
     }
   });
 
@@ -141,7 +157,18 @@ export function useInteraction() {
 
       const isPainting = useGameStore.getState().isPainting;
       if (isPainting) {
-        isMouseDown.current = true;
+        // Đang nhắm vào người mình -> bắt đầu vẽ (useFrame xử lý liên tục).
+        // Đang nhắm vào môi trường -> hút màu ngay (one-shot), không cần
+        // thoát chế độ — đúng yêu cầu gộp chung.
+        if (wasAimingOwnBody.current) {
+          isMouseDown.current = true;
+        } else {
+          const hover = useGameStore.getState().hoverColor;
+          if (hover) {
+            useGameStore.getState().setHeldColor(hover);
+            sfx.uiClick();
+          }
+        }
         return;
       }
 
@@ -157,13 +184,6 @@ export function useInteraction() {
         sendShoot(aimTargetSessionId);
         sfx.gunshot();
         if (aimTargetValid) sfx.hitDing(); // dự đoán phía client — server vẫn validate lại
-        return;
-      }
-
-      const hover = useGameStore.getState().hoverColor;
-      if (hover) {
-        useGameStore.getState().setHeldColor(hover);
-        sfx.uiClick();
       }
     };
 
