@@ -73,7 +73,6 @@ export function Player() {
   // Tạo KCC 1 lần khi world sẵn sàng, dọn dẹp lúc unmount.
   useEffect(() => {
     const controller = world.createCharacterController(0.02); // offset nhỏ, tránh kẹt số học
-    controller.setFilterGroups(0xffffffff);
     controller.enableAutostep(AUTOSTEP_MAX_HEIGHT, AUTOSTEP_MIN_WIDTH, true);
     controller.enableSnapToGround(SNAP_TO_GROUND_DISTANCE);
     controller.setMaxSlopeClimbAngle(MAX_SLOPE_CLIMB_ANGLE);
@@ -162,7 +161,7 @@ export function Player() {
 
   useFrame((_state, delta) => {
     const body = bodyRef.current;
-    const collider = colliderRef.current;
+    const collider = colliderRef.current?.raw();
     const controller = controllerRef.current;
     if (!body || !collider || !controller) return;
 
