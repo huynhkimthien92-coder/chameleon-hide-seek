@@ -58,8 +58,8 @@ export function ArtStudioScene() {
           nối tam giác). Mọi khối màu khác trong scene đều dùng cuboid nên ổn,
           chỉ riêng sàn cũ bị vì dùng trimesh — đã sửa. */}
       <RigidBody type="fixed" colliders="cuboid">
-        <mesh receiveShadow position={[0, -0.1, 0]} userData={{ pickable: true }}>
-          <boxGeometry args={[40, 0.2, 40]} />
+        <mesh receiveShadow position={[0, -0.5, 0]} userData={{ pickable: true }}>
+          <boxGeometry args={[40, 1, 40]} />
           <meshStandardMaterial map={floor.texture} />
         </mesh>
       </RigidBody>
