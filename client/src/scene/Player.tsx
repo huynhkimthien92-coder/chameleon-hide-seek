@@ -85,6 +85,19 @@ export function Player() {
     };
   }, [world]);
 
+  // [DEBUG TẠM] overlay đo KCC — gỡ sau khi tìm ra root cause.
+  const debugElRef = useRef<HTMLDivElement | null>(null);
+  const debugLastUpdate = useRef(0);
+  useEffect(() => {
+    const el = document.createElement("div");
+    el.style.cssText =
+      "position:fixed;left:8px;bottom:8px;z-index:9999;font:12px/1.4 monospace;" +
+      "background:rgba(0,0,0,.8);color:#0f0;padding:8px 10px;border-radius:6px;white-space:pre;pointer-events:none;";
+    document.body.appendChild(el);
+    debugElRef.current = el;
+    return () => { el.remove(); debugElRef.current = null; };
+  }, []);
+
   // Mặc định góc nhìn theo team khi server gán xong (vision.md: First person
   // cho Seeker, Third person cho Hider) — vẫn cho phép "V" đổi tay vì tiện
   // test/debug, không khoá cứng (việc khoá cứng để Giai đoạn 4 quyết định).
@@ -216,6 +229,21 @@ export function Player() {
       z: current.z + corrected.z,
     };
     body.setNextKinematicTranslation(next);
+    // [DEBUG TẠM] ghi số đo mỗi ~100ms (gỡ sau khi xong).
+    const nowMs = performance.now();
+    if (debugElRef.current && nowMs - debugLastUpdate.current > 100) {
+      debugLastUpdate.current = nowMs;
+      let colliderCount = -1;
+      try { colliderCount = (world as unknown as { colliders: { len(): number } }).colliders.len(); } catch { /* noop */ }
+      debugElRef.current.textContent =
+        `body.y      = ${next.y.toFixed(3)}\n` +
+        `vVel        = ${verticalVelocity.current.toFixed(3)}\n` +
+        `desired.y   = ${desiredMovement.y.toFixed(4)}\n` +
+        `corrected.y = ${corrected.y.toFixed(4)}\n` +
+        `grounded    = ${grounded}\n` +
+        `colliders   = ${colliderCount}\n` +
+        `delta(ms)   = ${(delta * 1000).toFixed(1)}`;
+    }
 
     // Mannequin chỉ hiện ở Third person, quay theo facingYaw (hướng thật),
     // KHÔNG theo yaw (góc camera) — để camera orbit tự do không xoay người.
