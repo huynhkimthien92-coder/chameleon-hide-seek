@@ -320,8 +320,10 @@ export function Player() {
       // qua đúng các bone trong skeleton.bones (đã skinning, world transform
       // chuẩn). Standing thật: hướng này phải ~ (0, +1, 0).
       let hipsToHeadDir = "n/a";
+      let debugStep = "grp=null";
       const grp = mannequinGroupRef.current;
       if (grp) {
+        debugStep = "grp=ok,sm=null";
         const findSkinnedMesh = (root: THREE.Object3D): THREE.SkinnedMesh | null => {
           let found: THREE.SkinnedMesh | null = null;
           root.traverse((o) => {
@@ -330,18 +332,26 @@ export function Player() {
           return found;
         };
         const sm = findSkinnedMesh(grp);
-        if (sm && sm.skeleton) {
-          const hips = sm.skeleton.bones.find((b: THREE.Bone) => b.name === "mixamorig:Hips");
-          const head = sm.skeleton.bones.find((b: THREE.Bone) => b.name === "mixamorig:Head");
-          if (hips && head) {
-            const hipsPos = hips.getWorldPosition(new THREE.Vector3());
-            const headPos = head.getWorldPosition(new THREE.Vector3());
-            const dir = headPos.sub(hipsPos).normalize();
-            hipsToHeadDir = `${dir.x.toFixed(2)},${dir.y.toFixed(2)},${dir.z.toFixed(2)}`;
+        if (sm) {
+          debugStep = `sm=ok(${sm.name || "noname"}),skeleton=${sm.skeleton ? "ok" : "MISSING"}`;
+          if (sm.skeleton) {
+            const boneNames = sm.skeleton.bones.map((b: THREE.Bone) => b.name);
+            const hips = sm.skeleton.bones.find((b: THREE.Bone) => b.name === "mixamorig:Hips");
+            const head = sm.skeleton.bones.find((b: THREE.Bone) => b.name === "mixamorig:Head");
+            debugStep = `bones=${boneNames.length},hips=${hips ? "found" : "MISSING"},head=${head ? "found" : "MISSING"}`;
+            if (hips && head) {
+              const hipsPos = hips.getWorldPosition(new THREE.Vector3());
+              const headPos = head.getWorldPosition(new THREE.Vector3());
+              const dir = headPos.sub(hipsPos).normalize();
+              hipsToHeadDir = `${dir.x.toFixed(2)},${dir.y.toFixed(2)},${dir.z.toFixed(2)}`;
+              debugStep = `OK len=${headPos.distanceTo(hipsPos).toFixed(3)}`;
+            } else if (boneNames.length > 0) {
+              debugStep += ` | first3names=${boneNames.slice(0, 3).join("|")}`;
+            }
           }
         }
       }
-      (window as unknown as Record<string, unknown>).__playerMeshDebug = { hipsToHeadDir };
+      (window as unknown as Record<string, unknown>).__playerMeshDebug = { hipsToHeadDir, debugStep };
 
       // [DEBUG TẠM #5] in TOÀN BỘ đường đi (name + local quaternion + local
       // position) từ group ngoài xuống tới SkinnedMesh — đúng 1 lần. Mục
@@ -381,6 +391,7 @@ export function Player() {
         `grounded    = ${grounded}\n` +
         `colliders   = ${colliderCount}\n` +
         `meshUp      = ${hipsToHeadDir}\n` +
+        `step        = ${debugStep}\n` +
         `delta(ms)   = ${(delta * 1000).toFixed(1)}`;
     }
 
