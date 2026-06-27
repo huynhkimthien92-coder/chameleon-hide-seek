@@ -111,6 +111,7 @@ export function Player() {
   // [DEBUG TẠM] overlay đo KCC — gỡ sau khi tìm ra root cause.
   const debugElRef = useRef<HTMLDivElement | null>(null);
   const debugLastUpdate = useRef(0);
+  const loggedHierarchyRef = useRef(false);
   useEffect(() => {
     const el = document.createElement("div");
     el.style.cssText =
@@ -328,6 +329,36 @@ export function Player() {
         }
       }
       (window as unknown as Record<string, unknown>).__playerMeshDebug = { meshName, meshUp };
+
+      // [DEBUG TẠM #5] in TOÀN BỘ đường đi (name + local quaternion + local
+      // position) từ group ngoài xuống tới SkinnedMesh — đúng 1 lần. Mục
+      // tiêu: xem node YUpFix (rotation kỳ vọng ≈[-0.707,0,0,0.707]) có còn
+      // tồn tại trong cây clone thật lúc chạy hay không.
+      if (!loggedHierarchyRef.current && grp) {
+        loggedHierarchyRef.current = true;
+        const path: Record<string, unknown>[] = [];
+        const walk = (o: THREE.Object3D, depth: number) => {
+          if (depth > 6) return; // tránh log quá sâu xuống từng bone
+          path.push({
+            depth,
+            name: o.name || "(no name)",
+            type: o.type,
+            localQuat: [
+              +o.quaternion.x.toFixed(4),
+              +o.quaternion.y.toFixed(4),
+              +o.quaternion.z.toFixed(4),
+              +o.quaternion.w.toFixed(4),
+            ],
+            localPos: [+o.position.x.toFixed(4), +o.position.y.toFixed(4), +o.position.z.toFixed(4)],
+            childCount: o.children.length,
+          });
+          // chỉ đi xuống nhánh đầu tiên (đủ để thấy YUpFix/RootNode/Hips...)
+          if (o.children[0]) walk(o.children[0], depth + 1);
+        };
+        walk(grp, 0);
+        (window as unknown as Record<string, unknown>).__playerHierarchy = path;
+        console.log("[DEBUG] window.__playerHierarchy đã sẵn sàng — gõ: window.__playerHierarchy");
+      }
 
       debugElRef.current.textContent =
         `body.y      = ${next.y.toFixed(3)}\n` +
