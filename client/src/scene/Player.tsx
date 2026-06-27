@@ -51,6 +51,12 @@ export function Player() {
   const isFirstPerson = useRef(false);
   const keys = useRef<Record<string, boolean>>({});
 
+  // [DEBUG TẠM #2] log từng frame từ lúc spawn — khai báo ở TOP-LEVEL component
+  // (không phải trong useFrame — gọi hook trong callback vi phạm Rules of
+  // Hooks và làm crash toàn bộ React, đó là lỗi #321 ở lần trước).
+  const frameLogRef = useRef<Record<string, number | boolean>[]>([]);
+  (window as unknown as { __frameLog?: typeof frameLogRef.current }).__frameLog = frameLogRef.current;
+
   const localPose = useGameStore((s) => s.localPose);
   const team = useGameStore((s) => s.team);
   const sessionId = useGameStore((s) => s.sessionId);
@@ -229,6 +235,7 @@ export function Player() {
       z: current.z + corrected.z,
     };
     body.setNextKinematicTranslation(next);
+
     // [DEBUG TẠM] ghi số đo mỗi ~100ms (gỡ sau khi xong).
     const nowMs = performance.now();
     if (debugElRef.current && nowMs - debugLastUpdate.current > 100) {
@@ -244,10 +251,7 @@ export function Player() {
         `colliders   = ${colliderCount}\n` +
         `delta(ms)   = ${(delta * 1000).toFixed(1)}`;
     }
-    // [DEBUG TẠM #2] ghi log TỪNG FRAME từ lúc spawn — bắt khoảnh khắc rơi qua sàn.
-    const frameLogRef = useRef<Record<string, number | boolean>[]>([]);
-    (window as unknown as { __frameLog?: typeof frameLogRef.current }).__frameLog = frameLogRef.current;
-    
+
     // [DEBUG TẠM #2] log 40 frame đầu (~0.66s) — đủ để thấy lúc đáy capsule
     // chạm/đáng-ra-phải-chạm sàn (y: 1.0 -> 0.75).
     if (frameLogRef.current.length < 40) {
