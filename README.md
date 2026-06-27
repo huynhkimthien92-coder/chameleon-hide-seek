@@ -98,6 +98,11 @@ Không có ảnh sàn chuyên dụng sẵn — tái dùng 1 trong 2 ảnh grunge
 
 ⏳ **Đã cắt giảm theo yêu cầu**: Mobile/cảm ứng (tạm hoãn, ưu tiên chuột+bàn phím chuẩn trước) và UV unwrap thủ công bằng Blender (tiếp tục dùng script Node — Bảng vẽ hiện tại đã ổn định, không cần làm lại).
 
+## Vẽ tự do — bổ sung: zoom + chỉnh cỡ cọ
+
+- **Zoom lúc tô màu**: cuộn chuột để camera gần/xa nhân vật (1.2–5 unit), CHỈ có tác dụng lúc `isPainting=true` — không ảnh hưởng khoảng cách camera mặc định lúc chơi bình thường. Vẫn không xoay được (giữ đúng nguyên tắc "đứng yên như vẽ tranh"), chỉ đổi khoảng cách để tô chi tiết hơn.
+- **Chỉnh cỡ cọ**: thanh trượt trong panel dưới màn hình (chỉ hiện lúc đang tô màu), khoảng 0.02–0.15 (đơn vị UV). Thay cho hằng số cố định trước đó — `brushSize` giờ ở store, `useInteraction.ts` đọc trực tiếp mỗi lần vẽ.
+
 ## Vẽ tự do — ĐỔI LẦN 5: gộp hút màu vào chung chế độ đứng yên với vẽ
 
 Sau khi sửa bug lock-pointer, phát hiện thêm vấn đề tương tự: **hút màu vẫn dùng kiểu camera xoay-để-ngắm** (như lúc đi lại bình thường) — xoay camera để ngắm tường làm mất tương quan "người mình đứng đâu so với tường đó", rất khó so màu cho khớp (cùng bản chất vấn đề như lúc vẽ ở lần đổi 1, chỉ là chưa áp dụng fix cho bước hút màu).
@@ -120,6 +125,37 @@ Hệ quả: Hider không còn hút màu được NGOÀI chế độ "Tô màu" n
 - **Đánh đổi rõ ràng, đã thống nhất với người dùng**: không xoay camera được trong lúc vẽ (chủ ý — giống vẽ lên tranh, không phải xoay mô hình 3D như app chỉnh nhân vật). Muốn vẽ mặt khác của người (lưng, hông...): thoát chế độ vẽ, tự xoay người bằng WASD/chuột cho mặt cần vẽ hướng ra camera, vào vẽ lại. Workflow lặp "xoay người → vẽ → xoay tiếp" thay cho "xoay camera quanh người đứng yên".
 - Kỹ thuật: tái dùng cơ chế raycast thủ công (`userData.isBodyPart`/`ownerSessionId` trên Mannequin, giống lần đổi 1–2) nhưng nguồn toạ độ là **vị trí con trỏ chuột thật** (`clientX/clientY` → NDC qua `getBoundingClientRect()`), không phải tích lũy `movementX/Y` — đơn giản hơn nhiều, không cần OrbitControls hay logic clamp riêng.
 - Đã xoá hẳn `ui/PaintBoard.tsx` (không còn dùng).
+
+## Mannequin v3 — Pose bằng xương thật (Mixamo rig) + thu nhỏ kích thước
+
+**Đây là thay đổi rủi ro cao nhất trong toàn bộ project — đọc kỹ phần "Rủi ro còn lại" trước khi tin tưởng tuyệt đối.**
+
+### Vì sao đổi
+Cách cũ "xoay/scale cả khối" cho crouch (ép tỉ lệ Y) nhìn cứng, không đúng giải phẫu. File FBX (xem mục Mannequin v2) có rig + skin THẬT từ Mixamo (22 bone) — tận dụng để gập khớp thật.
+
+### Phát hiện quan trọng: animation trong file KHÔNG phải animation chuyển động
+File chỉ có 1 animation tên "mixamo.com" nhưng **chỉ 1-2 keyframe** (gần như đứng yên) — thực chất là T-pose tĩnh được Mixamo export kèm, không phải animation đi/ngồi thật. Vì vậy **không "chạy" animation có sẵn** — phải tự dựng pose bằng cách xoay xương trực tiếp.
+
+### 2 bug thật bắt được khi xử lý (rất đáng nói lại)
+1. **Lật gương trái-phải**: công thức xoay Z-up→Y-up dùng cho bản mesh tĩnh trước đây (`new_x=-old_y, new_y=old_z, new_z=old_x`) có **determinant = -1** (phép phản chiếu, không phải rotation thật) — không phát hiện được vì hình người đối xứng nhìn vẫn "đúng". Với xương có tên Left/Right rõ ràng, lỗi này sẽ làm da tay trái dính nhầm xương phải. Sửa bằng công thức ĐÚNG (`new_x=old_x, new_y=old_z, new_z=-old_y`, determinant=+1), áp ở **cấp node** (quaternion) thay vì tự tính tay trên mảng vertex — đảm bảo xương và mesh luôn nhất quán.
+2. **Tự dựng cây xương bằng tay bị sai** (không tìm ra nguyên nhân chính xác, nghi do node phụ `_$AssimpFbx$_PreRotation` mà assimp sinh ra khi convert FBX) — world position tính ra sai lệch lớn so với thực tế. Phát hiện bằng cách đối chiếu với `inverseBindMatrices` (dữ liệu skinning chính thức, đáng tin cậy hơn việc tự suy cây node) — khớp hoàn toàn với vertex mesh, xác nhận **file gốc không lỗi, chỉ là cách tự verify ban đầu bị sai**. Từ đó đổi hẳn sang dùng `inverseBindMatrices` làm nguồn duy nhất.
+
+### Cách làm (giảm rủi ro tối đa có thể)
+- **Tính + verify TOÀN BỘ quaternion pose NGOÀI app** (script Node.js riêng, không chạy trong code thật) — xác định đúng hướng từng trục bằng cách đo hướng ngón chân (X dương = phía trước), verify từng xương tay/chân bằng cách tính world position trước/sau khi xoay thử (ví dụ: tay phải cần dấu NGƯỢC tay trái do là xương đối xứng — phát hiện qua test, không đoán).
+- **Idle**: hạ 2 tay từ T-pose xuống 2 bên (xoay xương Arm thật).
+- **Crouch**: gập hông (UpLeg) + gối (Leg) + hạ hông (Hips) — verify số liệu: đầu hạ ~0.26 unit (ngồi xuống rõ), **chân lệch <0.003 unit so với vị trí gốc** (gần như không trượt sàn).
+- **Lean/Lay**: VẪN dùng cách xoay/dịch cả khối cũ (`poseTransform.ts`) — vì bản chất chỉ là nghiêng/xoay CẢ THÂN, không cần cử động khớp riêng, rủi ro thấp hơn nhiều so với đoán góc khớp.
+- Quaternion đã verify được **gắn cứng vào `poseBones.ts`** — code thật chỉ gán giá trị, KHÔNG tính toán lại lúc chạy (giảm tối đa khả năng lỗi runtime).
+- Mỗi player clone skeleton ĐỘC LẬP qua `SkeletonUtils.clone()` (three-stdlib) — **không dùng `.clone()` thường** (chỉ copy tham chiếu skeleton, mọi player sẽ pose theo người cuối cùng gọi — lỗi kinh điển khi dùng nhiều instance SkinnedMesh).
+
+### Đơn giản hoá kéo theo: bỏ hệ thống 4 phần (head/torso/arms/legs)
+Vì mesh giờ liền 1 khối có UV thật tốt, không cần chia 4 phần như trước — **1 texture canvas duy nhất (512×512, tăng từ 256×256/phần)** phủ nguyên người. Đã đơn giản hoá theo: `paintRegistry.ts` (bỏ `BodyPart`), `useInteraction.ts`/`net/colyseus.ts`/`GameRoom.ts` (message `paintStroke` bỏ field `part`), smoke test (bỏ `part`).
+
+### Thu nhỏ kích thước (theo yêu cầu)
+Cao 1.8 → **1.5** unit. Đồng bộ theo đúng tỉ lệ (1.5/1.8≈0.833): `CapsuleCollider` (0.5,0.4)→(0.42,0.33), `CAPSULE_GROUND_OFFSET` (-0.9)→(-0.75), các offset camera (eye/chest height) cũng nhân theo tỉ lệ này.
+
+### ⚠️ Rủi ro còn lại — CẦN TEST KỸ
+Đã verify số liệu rất kỹ (toán học, không chỉ "nhìn có vẻ đúng"), nhưng **chưa thấy được kết quả thật trên browser** — không loại trừ hoàn toàn khả năng có gì đó nhìn chưa tự nhiên (vd: vai/khuỷu tay hơi méo ở 1 góc nhìn cụ thể, dù world-position các khớp chính đã đúng). Test sau khi deploy: đổi qua idle/crouch nhiều lần liên tục (xem có bug hình ảnh không), nhìn từ nhiều góc camera, đặc biệt để ý vùng vai/hông là nơi dễ lộ lỗi nhất nếu có. Có gì bất thường, chụp ảnh gửi lại — đã giữ `mannequin_v1_old_backup.glb` và `mannequin_v2_static_backup.glb` để rollback nhanh nếu cần.
 
 ## Mannequin v2 — thay mới từ file FBX (chất lượng tốt nhất từ trước đến giờ)
 

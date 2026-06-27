@@ -57,13 +57,12 @@ async function run() {
     aReceivedOwnStroke = true;
   });
 
-  roomA.send("paintStroke", { part: "head", u: 0.5, v: 0.5, color: "#ff0000", radius: 0.06 });
+  roomA.send("paintStroke", { u: 0.5, v: 0.5, color: "#ff0000", radius: 0.06 });
   await new Promise((r) => setTimeout(r, 300));
 
   const paintOk =
     bReceivedStroke?.sessionId === roomA.sessionId &&
-    bReceivedStroke?.part === "head" &&
-    bReceivedStroke?.color === "#ff0000" &&
+        bReceivedStroke?.color === "#ff0000" &&
     !aReceivedOwnStroke;
   log("TEST", `B nhận stroke từ A = ${JSON.stringify(bReceivedStroke)}, A tự nhận lại nét mình = ${aReceivedOwnStroke}`);
 
@@ -72,9 +71,9 @@ async function run() {
   roomB.onMessage("paintStroke", () => {
     garbageBroadcastCount++;
   });
-  roomA.send("paintStroke", { part: "head", u: 0.5, v: 0.5, color: "javascript:alert(1)", radius: 0.06 });
-  roomA.send("paintStroke", { part: "not_a_real_part", u: 0.5, v: 0.5, color: "#000000", radius: 0.06 });
-  roomA.send("paintStroke", { part: "head", u: 99, v: 0.5, color: "#000000", radius: 0.06 }); // u ngoài [0,1]
+  roomA.send("paintStroke", { u: 0.5, v: 0.5, color: "javascript:alert(1)", radius: 0.06 });
+  roomA.send("paintStroke", { u: 99, v: 0.5, color: "#000000", radius: 0.06 }); // u ngoài [0,1]
+  roomA.send("paintStroke", { u: 0.5, v: 0.5, color: "#000000", radius: 99 }); // radius ngoài giới hạn
   await new Promise((r) => setTimeout(r, 200));
   const validateOk = garbageBroadcastCount === 0;
   log("TEST", `số broadcast nhận được từ 3 input rác = ${garbageBroadcastCount} (phải = 0)`);
@@ -87,7 +86,7 @@ async function run() {
     cHistory = history;
   });
   await new Promise((r) => setTimeout(r, 300));
-  const catchUpOk = cHistory?.[roomA.sessionId]?.some((s) => s.color === "#ff0000" && s.part === "head");
+  const catchUpOk = cHistory?.[roomA.sessionId]?.some((s) => s.color === "#ff0000");
   log("TEST", `C nhận paintHistoryBatch chứa nét của A = ${!!catchUpOk}`);
   roomC.leave();
 

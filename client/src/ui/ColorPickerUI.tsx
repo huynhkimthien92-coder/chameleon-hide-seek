@@ -21,6 +21,8 @@ export function ColorPickerUI() {
   const heldColor = useGameStore((s) => s.heldColor);
   const isPainting = useGameStore((s) => s.isPainting);
   const setIsPainting = useGameStore((s) => s.setIsPainting);
+  const brushSize = useGameStore((s) => s.brushSize);
+  const setBrushSize = useGameStore((s) => s.setBrushSize);
 
   const togglePaint = () => {
     setIsPainting(!isPainting);
@@ -46,13 +48,33 @@ export function ColorPickerUI() {
         />
       </div>
 
-      <div className="text-sm text-ink/70 max-w-[220px]">
+      <div className="text-sm text-ink/70 max-w-[200px]">
         {isPainting
           ? "Nhắm vào tường để hút màu · Nhắm vào người để tô"
           : heldColor
           ? "Đang cầm màu này"
-          : "Bấm \"Tô màu\" để bắt đầu"}
+          : 'Bấm "Tô màu" để bắt đầu'}
       </div>
+
+      {/* Cỡ cọ — chỉ cần lúc đang tô màu, cuộn chuột để zoom cũng ở đây luôn */}
+      {isPainting && (
+        <div className="flex items-center gap-2 bg-base rounded-pill px-3 py-1.5">
+          <span
+            className="rounded-full bg-ink/40 shrink-0"
+            style={{ width: 6 + brushSize * 60, height: 6 + brushSize * 60 }}
+          />
+          <input
+            type="range"
+            min={0.02}
+            max={0.15}
+            step={0.005}
+            value={brushSize}
+            onChange={(e) => setBrushSize(Number(e.target.value))}
+            className="w-24 accent-accent"
+            title="Cỡ cọ — cuộn chuột để zoom gần/xa"
+          />
+        </div>
+      )}
 
       <button
         onClick={togglePaint}

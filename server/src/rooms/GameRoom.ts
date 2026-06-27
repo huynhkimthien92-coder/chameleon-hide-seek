@@ -16,13 +16,12 @@ const MAX_SHOOT_RANGE = 30; // mét
 const SHOOT_ANGLE_TOLERANCE = (25 * Math.PI) / 180; // 25 độ, đổi ra radian
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
-const VALID_PARTS = ["head", "torso", "arms", "legs"] as const;
 const VALID_POSES = ["idle", "crouch", "lean", "lay", "freeze"] as const;
 
 const MAX_STROKES_PER_PLAYER = 2000; // giới hạn bộ nhớ — cũ nhất bị bỏ khi vượt
 
 type MoveMessage = { x: number; y: number; z: number; rotY: number };
-type PaintStrokeMessage = { part: string; u: number; v: number; color: string; radius: number };
+type PaintStrokeMessage = { u: number; v: number; color: string; radius: number };
 type PoseMessage = { pose: string };
 type ShootMessage = { targetSessionId?: string };
 
@@ -86,14 +85,12 @@ export class GameRoom extends Room<{ state: GameState }> {
       if (!player) return;
 
       // Validate chặt — đây là input người dùng gửi lên, không tin tưởng mù quáng.
-      if (!VALID_PARTS.includes(message?.part as any)) return;
       if (!HEX_COLOR_RE.test(message?.color)) return;
       if (typeof message?.u !== "number" || message.u < 0 || message.u > 1) return;
       if (typeof message?.v !== "number" || message.v < 0 || message.v > 1) return;
       if (typeof message?.radius !== "number" || message.radius <= 0 || message.radius > 0.5) return;
 
       const stroke: PaintStrokeMessage = {
-        part: message.part,
         u: message.u,
         v: message.v,
         color: message.color,

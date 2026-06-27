@@ -1,80 +1,74 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useGLTF } from "@react-three/drei";
+import { SkeletonUtils } from "three-stdlib";
 import * as THREE from "three";
-import { getOrCreatePlayerCanvases, releasePlayerCanvases } from "./paintRegistry";
+import { getOrCreatePlayerCanvas, releasePlayerCanvas } from "./paintRegistry";
+import { applyBonePose } from "./poseBones";
+import type { Pose } from "./poseTransform";
 
 const MODEL_URL = "/models/mannequin.glb";
 
-type MannequinGLTF = {
-  nodes: {
-    head: THREE.Mesh;
-    torso: THREE.Mesh;
-    arms: THREE.Mesh;
-    legs: THREE.Mesh;
-  };
-};
-
 /**
- * Mannequin thật (v2 — xem README mục "Mannequin v2"), gồm 4 mesh riêng
- * head/torso/arms/legs, mỗi mesh có UV thật (lấy từ model gốc, renormalize
- * theo từng phần — không tự tính cylindrical/spherical như bản v1).
+ * Mannequin v3 — rig + skin THẬT từ Mixamo (22 bone), thay cho cách "xoay cả
+ * khối cứng" cũ. 1 mesh liền duy nhất (không còn chia head/torso/arms/legs
+ * — UV thật của model đã đủ tốt để dùng 1 texture chung, xem README mục
+ * Mannequin v3). Pose (idle/crouch) áp bằng cách xoay XƯƠNG thật qua
+ * `poseBones.ts` (quaternion đã tính + verify ngoại tuyến — xem file đó).
  *
- * Mỗi player có 1 bộ canvas vẽ riêng (paintRegistry.ts). Vẽ lên người làm
- * NGAY TRONG THẾ GIỚI GAME (xem useInteraction.ts) — không qua khung 3D
- * riêng (đã bỏ PaintBoard vì làm mất hoàn toàn khả năng so màu với môi
- * trường xung quanh khi vẽ, xem README).
- *
- * `userData.isBodyPart` + `ownerSessionId` gắn trên từng mesh để raycaster
- * (useInteraction.ts) nhận diện "đang nhắm vào đúng người nào, phần nào".
+ * Mỗi player phải có skeleton ĐỘC LẬP riêng (không share) — dùng
+ * `SkeletonUtils.clone()` của three-stdlib, KHÔNG dùng `.clone()` thường
+ * (chỉ copy tham chiếu skeleton, mọi player sẽ cùng pose theo người cuối
+ * cùng gọi applyBonePose — lỗi kinh điển khi dùng SkinnedMesh nhiều instance).
  */
-export function Mannequin({ sessionId, castShadow = true }: { sessionId: string; castShadow?: boolean }) {
-  const { nodes } = useGLTF(MODEL_URL) as unknown as MannequinGLTF;
+export function Mannequin({
+  sessionId,
+  pose = "idle",
+  castShadow = true,
+}: {
+  sessionId: string;
+  pose?: Pose;
+  castShadow?: boolean;
+}) {
+  const { scene } = useGLTF(MODEL_URL);
+  const groupRef = useRef<THREE.Group>(null);
 
-  const canvases = useMemo(() => getOrCreatePlayerCanvases(sessionId), [sessionId]);
+  const canvas = useMemo(() => getOrCreatePlayerCanvas(sessionId), [sessionId]);
 
-  const materials = useMemo(
-    () => ({
-      head: new THREE.MeshStandardMaterial({ map: canvases.head.texture, roughness: 0.8 }),
-      torso: new THREE.MeshStandardMaterial({ map: canvases.torso.texture, roughness: 0.8 }),
-      arms: new THREE.MeshStandardMaterial({ map: canvases.arms.texture, roughness: 0.8 }),
-      legs: new THREE.MeshStandardMaterial({ map: canvases.legs.texture, roughness: 0.8 }),
-    }),
-    [canvases]
-  );
+  // Clone TOÀN BỘ scene (mesh + skeleton) độc lập cho riêng player này.
+  const cloned = useMemo(() => SkeletonUtils.clone(scene) as THREE.Group, [scene]);
 
-  return (
-    <group>
-      <mesh
-        geometry={nodes.head.geometry}
-        material={materials.head}
-        castShadow={castShadow}
-        userData={{ isBodyPart: true, bodyPart: "head", ownerSessionId: sessionId }}
-      />
-      <mesh
-        geometry={nodes.torso.geometry}
-        material={materials.torso}
-        castShadow={castShadow}
-        userData={{ isBodyPart: true, bodyPart: "torso", ownerSessionId: sessionId }}
-      />
-      <mesh
-        geometry={nodes.arms.geometry}
-        material={materials.arms}
-        castShadow={castShadow}
-        userData={{ isBodyPart: true, bodyPart: "arms", ownerSessionId: sessionId }}
-      />
-      <mesh
-        geometry={nodes.legs.geometry}
-        material={materials.legs}
-        castShadow={castShadow}
-        userData={{ isBodyPart: true, bodyPart: "legs", ownerSessionId: sessionId }}
-      />
-    </group>
-  );
+  const skinnedMesh = useMemo<THREE.SkinnedMesh | null>(() => {
+    let found: THREE.SkinnedMesh | null = null;
+    cloned.traverse((obj) => {
+      if ((obj as THREE.SkinnedMesh).isSkinnedMesh) found = obj as THREE.SkinnedMesh;
+    });
+    return found;
+  }, [cloned]);
+
+  // Gắn texture canvas riêng của player này lên material — tạo material mới
+  // (không share) để mỗi player tô màu độc lập.
+  useEffect(() => {
+    if (!skinnedMesh) return;
+    skinnedMesh.material = new THREE.MeshStandardMaterial({ map: canvas.texture, roughness: 0.8 });
+    skinnedMesh.castShadow = castShadow;
+    skinnedMesh.userData.isOwnBody = true;
+    skinnedMesh.userData.ownerSessionId = sessionId;
+  }, [skinnedMesh, canvas, castShadow, sessionId]);
+
+  // Áp pose mỗi khi đổi (không phải mỗi frame — xoay xương 1 lần là đủ, xem
+  // poseBones.ts: không có animation thật để chạy liên tục).
+  useEffect(() => {
+    if (!skinnedMesh?.skeleton) return;
+    applyBonePose(skinnedMesh.skeleton.bones, pose);
+    skinnedMesh.skeleton.update();
+  }, [skinnedMesh, pose]);
+
+  return <primitive ref={groupRef} object={cloned} />;
 }
 
 /** Gọi khi 1 player rời phòng hẳn — KHÔNG gọi cho local player (cần giữ suốt session). */
 export function releaseMannequinCanvases(sessionId: string) {
-  releasePlayerCanvases(sessionId);
+  releasePlayerCanvas(sessionId);
 }
 
 useGLTF.preload(MODEL_URL);

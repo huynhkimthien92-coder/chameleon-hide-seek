@@ -4,12 +4,11 @@ import * as THREE from "three";
 import { useGameStore } from "../store/useGameStore";
 import { sampleCanvasAtUV, getSampleableCanvas } from "./colorSampling";
 import { sendShoot, sendPaintStroke } from "../net/colyseus";
-import { paintDab, type BodyPart } from "./paintRegistry";
+import { paintDab } from "./paintRegistry";
 import { sfx } from "../audio/sounds";
 
 const PICK_RANGE = 6; // mét — tầm hút màu tối đa (đo từ NHÂN VẬT, không phải camera)
 const AIM_RANGE = 30; // mét — tầm ngắm bắn, khớp MAX_SHOOT_RANGE phía server
-const BRUSH_RADIUS = 0.05; // bán kính nét cọ, đơn vị UV (0..1)
 const PAINT_INTERVAL_MS = 50; // throttle vẽ — ~20 nét/giây, đủ mượt không spam mạng
 
 /** Đi lên cây cha tìm group đã gắn userData.playerSessionId (xem RemotePlayer.tsx). */
@@ -78,7 +77,7 @@ export function useInteraction() {
     // --- Chế độ tô màu: GỘP hút màu (môi trường) + vẽ (người mình) ---
     if (isPainting) {
       const ownBodyHit = hits.find(
-        (h) => h.object.userData?.isBodyPart && h.object.userData?.ownerSessionId === mySessionId && h.uv
+        (h) => h.object.userData?.isOwnBody && h.object.userData?.ownerSessionId === mySessionId && h.uv
       );
 
       if (ownBodyHit?.uv) {
@@ -94,12 +93,12 @@ export function useInteraction() {
         }
         if (isMouseDown.current) {
           const heldColor = useGameStore.getState().heldColor;
+          const brushSize = useGameStore.getState().brushSize;
           const now = performance.now();
           if (heldColor && now - lastPaintAt.current >= PAINT_INTERVAL_MS) {
             lastPaintAt.current = now;
-            const part = ownBodyHit.object.userData.bodyPart as BodyPart;
-            paintDab(mySessionId ?? "local-pending", part, ownBodyHit.uv.x, ownBodyHit.uv.y, heldColor, BRUSH_RADIUS);
-            sendPaintStroke(part, ownBodyHit.uv.x, ownBodyHit.uv.y, heldColor, BRUSH_RADIUS);
+            paintDab(mySessionId ?? "local-pending", ownBodyHit.uv.x, ownBodyHit.uv.y, heldColor, brushSize);
+            sendPaintStroke(ownBodyHit.uv.x, ownBodyHit.uv.y, heldColor, brushSize);
           }
         }
         return;

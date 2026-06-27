@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import type { Pose } from "../scene/poseTransform";
-import type { BodyPart } from "../scene/paintRegistry";
 
 export type Team = "seeker" | "hider";
 export type MatchPhase = "lobby" | "preparing" | "playing" | "ended";
@@ -51,6 +50,7 @@ type GameStore = {
   // với môi trường xung quanh — đúng mục đích cốt lõi của camo.
   isPainting: boolean;
   isAimingOwnBody: boolean; // đang nhắm đúng người mình (sẵn sàng vẽ) trong lúc isPainting
+  brushSize: number; // bán kính nét cọ, đơn vị UV (0..1) — chỉnh bằng thanh trượt trong ColorPickerUI
 
   // Pose System
   localPose: Pose;
@@ -81,6 +81,7 @@ type GameStore = {
 
   setIsPainting: (value: boolean) => void;
   setIsAimingOwnBody: (value: boolean) => void;
+  setBrushSize: (size: number) => void;
 
   setLocalPose: (pose: Pose) => void;
 
@@ -109,6 +110,7 @@ export const useGameStore = create<GameStore>((set) => ({
 
   isPainting: false,
   isAimingOwnBody: false,
+  brushSize: 0.05,
 
   localPose: "idle",
 
@@ -145,10 +147,10 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setIsPainting: (value) => set({ isPainting: value }),
   setIsAimingOwnBody: (value) => set({ isAimingOwnBody: value }),
+  setBrushSize: (size) => set({ brushSize: size }),
 
   setLocalPose: (pose) => set({ localPose: pose }),
 
   setAimTarget: (sessionId, valid) => set({ aimTargetSessionId: sessionId, aimTargetValid: valid }),
 }));
 
-export type { BodyPart };

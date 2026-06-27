@@ -70,7 +70,7 @@ export function HUD() {
           className="absolute top-20 left-1/2 -translate-x-1/2 bg-accent text-white
                      font-display font-bold px-5 py-2 rounded-pill shadow-hard-accent"
         >
-          🎨 Đang tô màu — nhắm tường để hút màu, nhắm người để tô · Escape/"Xong" để thoát
+          🎨 Đang tô màu — nhắm tường để hút màu, nhắm người để tô · Cuộn chuột để zoom · Escape/"Xong" để thoát
         </div>
       )}
 

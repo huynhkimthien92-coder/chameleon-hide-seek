@@ -1,7 +1,7 @@
 import { Client, getStateCallbacks, type Room } from "@colyseus/sdk";
 import { useGameStore } from "../store/useGameStore";
 import type { Pose } from "../scene/poseTransform";
-import type { BodyPart, Stroke } from "../scene/paintRegistry";
+import type { Stroke } from "../scene/paintRegistry";
 import { paintDab, replayStrokes } from "../scene/paintRegistry";
 
 const SERVER_URL = import.meta.env.VITE_COLYSEUS_URL ?? "ws://localhost:2567";
@@ -82,7 +82,7 @@ export async function connectToGame() {
     // Người khác vẽ -> vẽ lại lên đúng canvas của họ (xem paintRegistry.ts).
     // Không nhận lại nét của chính mình (server đã loại trừ — `except: client`).
     room.onMessage("paintStroke", (data: any) => {
-      paintDab(data.sessionId, data.part, data.u, data.v, data.color, data.radius);
+      paintDab(data.sessionId, data.u, data.v, data.color, data.radius);
     });
 
     // Catch-up lúc mới vào phòng: vẽ lại toàn bộ nét đã có của mọi người.
@@ -111,8 +111,8 @@ export function sendLocalTransform(x: number, y: number, z: number, rotY: number
 }
 
 /** Gửi 1 nét vẽ (chấm cọ) — gọi liên tục lúc kéo chuột vẽ, đã throttle ở phía gọi (useInteraction.ts). */
-export function sendPaintStroke(part: BodyPart, u: number, v: number, color: string, radius: number) {
-  room?.send("paintStroke", { part, u, v, color, radius });
+export function sendPaintStroke(u: number, v: number, color: string, radius: number) {
+  room?.send("paintStroke", { u, v, color, radius });
 }
 
 /** Gửi 1 lần khi người chơi đổi pose. */

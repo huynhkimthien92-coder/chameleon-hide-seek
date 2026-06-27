@@ -47,6 +47,7 @@ export function Player() {
   const yaw = useRef(0); // góc camera — luôn theo chuột (orbit tự do quanh nhân vật ở third-person)
   const facingYaw = useRef(0); // hướng NHÂN VẬT thật — chỉ đổi khi đang di chuyển (xem useFrame)
   const pitch = useRef(0);
+  const paintZoomDistance = useRef(3); // khoảng cách camera lúc tô màu — cuộn chuột để chỉnh (xem onWheel)
   const isFirstPerson = useRef(false);
   const keys = useRef<Record<string, boolean>>({});
 
@@ -119,16 +120,29 @@ export function Player() {
     const onKeyUp = (e: KeyboardEvent) => {
       keys.current[e.code] = false;
     };
+    const onWheel = (e: WheelEvent) => {
+      // Chỉ có tác dụng lúc đang tô màu — zoom gần/xa để tô chi tiết hơn,
+      // không ảnh hưởng khoảng cách camera mặc định lúc chơi bình thường.
+      if (!useGameStore.getState().isPainting) return;
+      e.preventDefault();
+      paintZoomDistance.current = THREE.MathUtils.clamp(
+        paintZoomDistance.current + e.deltaY * 0.0025,
+        1.2,
+        5
+      );
+    };
 
     canvas.addEventListener("click", onClick);
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
+    canvas.addEventListener("wheel", onWheel, { passive: false });
     return () => {
       canvas.removeEventListener("click", onClick);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      canvas.removeEventListener("wheel", onWheel);
     };
   }, [gl]);
 
@@ -147,7 +161,7 @@ export function Player() {
     if (eliminated) {
       if (isFirstPerson.current) {
         const pos = body.translation();
-        camera.position.set(pos.x, pos.y - 0.3, pos.z);
+        camera.position.set(pos.x, pos.y - 0.25, pos.z);
         camera.rotation.set(pitch.current, yaw.current, 0, "YXZ");
       }
       return;
@@ -211,17 +225,20 @@ export function Player() {
     }
 
     if (isFirstPerson.current) {
-      camera.position.set(next.x, next.y - 0.3, next.z);
+      camera.position.set(next.x, next.y - 0.25, next.z);
       camera.rotation.set(pitch.current, yaw.current, 0, "YXZ");
     } else {
       // Orbit quanh điểm nhìn cố định (ngực nhân vật) theo cả yaw VÀ pitch.
-      const distance = 5;
+      // Lúc đang tô màu: dùng khoảng cách riêng (paintZoomDistance, chỉnh
+      // bằng cuộn chuột — xem onWheel) để zoom gần hơn cho việc tô chi tiết,
+      // không ảnh hưởng khoảng cách mặc định lúc chơi bình thường.
+      const distance = useGameStore.getState().isPainting ? paintZoomDistance.current : 5;
       const horizontalDist = distance * Math.cos(pitch.current);
       const verticalOffset = distance * Math.sin(pitch.current);
       const camX = next.x - Math.sin(yaw.current) * horizontalDist;
       const camZ = next.z - Math.cos(yaw.current) * horizontalDist;
-      camera.position.set(camX, next.y - 0.1 + verticalOffset, camZ);
-      camera.lookAt(next.x, next.y - 0.1, next.z);
+      camera.position.set(camX, next.y - 0.08 + verticalOffset, camZ);
+      camera.lookAt(next.x, next.y - 0.08, next.z);
     }
 
     sendLocalTransform(next.x, next.y, next.z, facingYaw.current);
@@ -232,14 +249,14 @@ export function Player() {
 
   return (
     <RigidBody ref={bodyRef} type="kinematicPosition" colliders={false} position={[0, 1, 0]}>
-      <CapsuleCollider ref={colliderRef} args={[0.5, 0.4]} />
+      <CapsuleCollider ref={colliderRef} args={[0.42, 0.33]} />
       <group
         ref={mannequinGroupRef}
         rotation={[pose.rotX, Math.PI, pose.rotZ]}
         position={[0, CAPSULE_GROUND_OFFSET + pose.posY, 0]}
         scale={[1, pose.scaleY, 1]}
       >
-        <Mannequin sessionId={sessionId ?? "local-pending"} />
+        <Mannequin sessionId={sessionId ?? "local-pending"} pose={localPose} />
       </group>
     </RigidBody>
   );

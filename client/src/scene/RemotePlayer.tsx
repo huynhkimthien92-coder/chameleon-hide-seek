@@ -50,7 +50,7 @@ export function RemotePlayer({ player }: { player: RemotePlayerState }) {
         position={[0, CAPSULE_GROUND_OFFSET + pose.posY, 0]}
         scale={[1, pose.scaleY, 1]}
       >
-        <Mannequin sessionId={player.id} />
+        <Mannequin sessionId={player.id} pose={player.pose} />
       </group>
     </group>
   );
