@@ -34,7 +34,7 @@ export default function Game() {
     <>
       <Canvas shadows camera={{ fov: 60 }}>
         <Suspense fallback={null}>
-          <Physics gravity={[0, -18, 0]}>
+          <Physics gravity={[0, -18, 0]} debug >
             <ArtStudioScene />
             <Player />
             {Object.values(remotePlayers).map((p) => (
