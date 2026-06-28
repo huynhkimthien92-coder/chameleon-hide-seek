@@ -32,7 +32,13 @@ export function getPoseOffset(pose: Pose): PoseOffset {
     case "lean":
       return { scaleY: 1, posY: 0, rotX: 0, rotZ: 0.55 };
     case "lay":
-      return { scaleY: 1, posY: -0.55, rotX: Math.PI / 2, rotZ: 0 };
+      // ⚠️ CẬP NHẬT — giá trị cũ (rotX:+PI/2, posY:-0.55) tính cho bind pose
+      // GỐC (nằm ngang sẵn, trước khi sửa ở Mannequin.tsx). Sau khi sửa
+      // hướng đứng, tính lại bằng FK đầy đủ (gồm cả thành phần xoay Y=PI —
+      // thứ tự Euler XYZ làm ĐẢO DẤU rotX cần dùng, không phải lỗi đánh máy):
+      // rotX=-PI/2 cho thân nằm phẳng đúng hướng, posY=-0.0777 để điểm thấp
+      // nhất (chân) chạm đúng đáy capsule, không lơ lửng.
+      return { scaleY: 1, posY: -0.0777, rotX: -Math.PI / 2, rotZ: 0 };
     case "crouch":
     case "freeze":
     case "idle":
