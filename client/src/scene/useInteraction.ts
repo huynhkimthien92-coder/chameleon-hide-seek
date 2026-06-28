@@ -159,9 +159,43 @@ export function useInteraction() {
                   hasSkinWeight,
                   skinIndexSample_v0: sample(geo.attributes.skinIndex as THREE.BufferAttribute, 0),
                   skinWeightSample_v0: sample(geo.attributes.skinWeight as THREE.BufferAttribute, 0),
-                  skinIndexSample_v2000: sample(geo.attributes.skinIndex as THREE.BufferAttribute, 2000),
-                  skinWeightSample_v2000: sample(geo.attributes.skinWeight as THREE.BufferAttribute, 2000),
                 };
+              })()
+            : null,
+          // [DEBUG TẠM] kiểm tra layers (mesh vs raycaster) + material.side
+          // THẬT đang áp dụng — 1 trong 2 lệch sẽ làm raycast luôn trả về 0
+          // dù mọi thứ khác đúng.
+          layersAndMaterial: (() => {
+            const om = ownMesh as THREE.SkinnedMesh | null;
+            if (!om) return null;
+            return {
+              meshLayersMask: om.layers.mask,
+              raycasterLayersMask: raycaster.current.layers.mask,
+              cameraLayersMask: camera.layers.mask,
+              materialSide: (om.material as THREE.Material)?.side,
+              materialType: (om.material as THREE.Material)?.type,
+              isArrayMaterial: Array.isArray(om.material),
+              geometryGroups: om.geometry.groups?.length ?? 0,
+              matrixAutoUpdate: om.matrixAutoUpdate,
+              matrixWorldNeedsUpdate: om.matrixWorldNeedsUpdate,
+            };
+          })(),
+          // [DEBUG TẠM — QUYẾT ĐỊNH] gọi TRỰC TIẾP getVertexPosition() — hàm
+          // LÕI mà raycast dùng để lấy vị trí vertex SAU skinning — bỏ qua
+          // hoàn toàn raycaster/camera/ray. Nếu vị trí trả về vô lý (NaN,
+          // Infinity, hoặc trùng nhau bất thường giữa các vertex khác nhau)
+          // -> xác nhận lỗi nằm trong applyBoneTransform()/skinning, không
+          // phải raycast. Nếu vị trí HỢP LÝ -> lỗi nằm ở bước khác (camera/
+          // ray/bounding test), cần xem lại hướng khác.
+          vertexPositionDebug: ownMesh
+            ? (() => {
+                const om = ownMesh as THREE.SkinnedMesh;
+                const indices = [0, 500, 1000, 1954, 3000, 3907];
+                const v = new THREE.Vector3();
+                return indices.map((i) => {
+                  om.getVertexPosition(i, v);
+                  return { index: i, localPos: [+v.x.toFixed(4), +v.y.toFixed(4), +v.z.toFixed(4)] };
+                });
               })()
             : null,
         };
