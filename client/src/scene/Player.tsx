@@ -448,7 +448,14 @@ export function Player() {
 
   return (
     <RigidBody ref={bodyRef} type="kinematicPosition" colliders={false} position={[0, 1, 0]}>
-      <CapsuleCollider ref={colliderRef} args={[0.42, 0.33]} />
+      {/* Bán kính 0.225 — KHÔNG phải số đoán: tính từ skinning thật (Draco
+          decode + linear blend skinning đúng pose idle tay-đã-hạ) trên file
+          mannequin.glb, bounding box thật cho bề ngang (vai-vai) = 0.4494 ->
+          nửa = 0.2247 (cạnh rộng nhất, quyết định bán kính capsule tròn cần
+          tối thiểu bao nhiêu để không lộ vai ra ngoài). halfHeight = 0.525
+          để giữ tổng halfHeight+radius=0.75 không đổi (khớp chiều cao thật
+          đo được 1.4986 ≈ 1.5, không ảnh hưởng CAPSULE_GROUND_OFFSET). */}
+      <CapsuleCollider ref={colliderRef} args={[0.525, 0.225]} />
       <group
         ref={mannequinGroupRef}
         rotation={[pose.rotX, Math.PI, pose.rotZ]}
