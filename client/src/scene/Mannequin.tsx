@@ -77,8 +77,15 @@ export function Mannequin({
   // 2 nơi, không ảnh hưởng tới các giá trị ARM_DOWN/LEG_BEND trong
   // poseBones.ts (chúng là quaternion LOCAL của xương, không phụ thuộc lớp
   // bọc ngoài này).
+  // ⚠️ CẬP NHẬT — phép xoay +90X (NEW_FIX) ở trên xoay quanh GỐC (0,0,0)
+  // của group, nhưng thân người (Hông) lại không nằm ở gốc đó trước khi
+  // xoay (Hông nằm cách gốc ~0.68 unit theo Y cũ, do bind pose nằm ngang
+  // gốc) — nên xoay xong, Hông bị "quay vòng" lệch sang Z ≈ +0.68, làm
+  // toàn thân lệch khỏi đúng tâm capsule (đúng bug "người nằm ngoài
+  // collider, lệch sát vách" người dùng phát hiện). Bù bằng position Z
+  // ngược lại — đã verify bằng FK: sau bù, Hông về đúng (0,*,0) theo X/Z.
   return (
-    <group rotation={[Math.PI / 2, 0, 0]}>
+    <group rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.6824]}>
       <primitive ref={groupRef} object={cloned} />
     </group>
   );
