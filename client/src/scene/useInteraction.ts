@@ -136,6 +136,34 @@ export function useInteraction() {
           raycasterFar: raycaster.current.far,
           cameraNear: (camera as THREE.PerspectiveCamera).near,
           cameraFar: (camera as THREE.PerspectiveCamera).far,
+          // [DEBUG TẠM] kiểm tra trực tiếp dữ liệu skinIndex/skinWeight THẬT
+          // trên geometry — nghi GLTFLoader đổi tên JOINTS_0/WEIGHTS_0 (glTF)
+          // -> skinIndex/skinWeight (three.js) bị lỗi/rỗng khi mesh dùng nén
+          // Draco, khiến applyBoneTransform() (dùng cho raycast CPU-side)
+          // tính sai vị trí vertex dù GPU vẫn render đúng (đường dữ liệu
+          // khác, không qua thuộc tính JS này).
+          skinDebug: ownMesh
+            ? (() => {
+                const sm = ownMesh as THREE.SkinnedMesh;
+                const geo = sm.geometry;
+                const hasSkinIndex = !!geo.attributes.skinIndex;
+                const hasSkinWeight = !!geo.attributes.skinWeight;
+                const sample = (attr: THREE.BufferAttribute | undefined, n: number) => {
+                  if (!attr) return null;
+                  const out: number[] = [];
+                  for (let i = 0; i < 4; i++) out.push(attr.getComponent(n, i));
+                  return out;
+                };
+                return {
+                  hasSkinIndex,
+                  hasSkinWeight,
+                  skinIndexSample_v0: sample(geo.attributes.skinIndex as THREE.BufferAttribute, 0),
+                  skinWeightSample_v0: sample(geo.attributes.skinWeight as THREE.BufferAttribute, 0),
+                  skinIndexSample_v2000: sample(geo.attributes.skinIndex as THREE.BufferAttribute, 2000),
+                  skinWeightSample_v2000: sample(geo.attributes.skinWeight as THREE.BufferAttribute, 2000),
+                };
+              })()
+            : null,
         };
         if (ownMesh) {
           const sm = ownMesh as THREE.SkinnedMesh;
