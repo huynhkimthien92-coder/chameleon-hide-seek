@@ -119,6 +119,14 @@ export function useInteraction() {
           mySessionId,
           totalFound: allOwnMeshes.length,
           all: allOwnMeshes,
+          cameraPos: [+camera.position.x.toFixed(3), +camera.position.y.toFixed(3), +camera.position.z.toFixed(3)],
+          cameraDir: (() => {
+            const d = camera.getWorldDirection(new THREE.Vector3());
+            return [+d.x.toFixed(3), +d.y.toFixed(3), +d.z.toFixed(3)];
+          })(),
+          rayOrigin: [+raycaster.current.ray.origin.x.toFixed(3), +raycaster.current.ray.origin.y.toFixed(3), +raycaster.current.ray.origin.z.toFixed(3)],
+          rayDirection: [+raycaster.current.ray.direction.x.toFixed(3), +raycaster.current.ray.direction.y.toFixed(3), +raycaster.current.ray.direction.z.toFixed(3)],
+          ndcUsed: [+ndcX.toFixed(3), +ndcY.toFixed(3)],
         };
         if (ownMesh) {
           const sm = ownMesh as THREE.SkinnedMesh;
