@@ -12,7 +12,7 @@ export type Pose = "idle" | "crouch" | "lean" | "lay" | "freeze";
  * -0.75 - toe_Y = -0.75 - (-0.9153) ≈ 0.1653 (LƯU Ý: đổi dấu hẳn so với giá
  * trị cũ -0.75 — bình thường, vì hình học đã xoay hẳn 90°, không phải lỗi).
  */
-export const CAPSULE_GROUND_OFFSET = 0.1653;
+export const CAPSULE_GROUND_OFFSET = 0.1;
 
 export type PoseOffset = {
   scaleY: number;
