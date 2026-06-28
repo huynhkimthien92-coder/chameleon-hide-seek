@@ -97,14 +97,21 @@ export function useInteraction() {
           })),
         };
 
-        // [DEBUG TẠM #2] tìm TRỰC TIẾP SkinnedMesh có isOwnBody trong toàn
-        // scene (không qua raycast), đọc thẳng boundingSphere + world
-        // matrix + test raycast CHỈ riêng object đó — cô lập xem lỗi nằm ở
-        // chính object này (bounding sphere/world matrix sai) hay ở khâu
-        // khác (scene traversal, thứ tự render...).
+        // [DEBUG TẠM #2] tìm TRỰC TIẾP SkinnedMesh của CHÍNH MÌNH (lọc cả
+        // isOwnBody VÀ ownerSessionId — isOwnBody=true bị set cho MỌI người
+        // chơi, không chỉ riêng mình, lọc thiếu ownerSessionId sẽ bắt nhầm
+        // mesh người khác). Đọc thẳng boundingSphere + world matrix + test
+        // raycast CHỈ riêng object đó.
         let ownMesh: THREE.Object3D | null = null;
         scene.traverse((o) => {
-          if (!ownMesh && (o as THREE.SkinnedMesh).isSkinnedMesh && o.userData?.isOwnBody) ownMesh = o;
+          if (
+            !ownMesh &&
+            (o as THREE.SkinnedMesh).isSkinnedMesh &&
+            o.userData?.isOwnBody &&
+            o.userData?.ownerSessionId === mySessionId
+          ) {
+            ownMesh = o;
+          }
         });
         if (ownMesh) {
           const sm = ownMesh as THREE.SkinnedMesh;
