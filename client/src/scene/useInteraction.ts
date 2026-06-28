@@ -115,6 +115,7 @@ export function useInteraction() {
             allOwnMeshes.push({ uuid: o.uuid, worldPos: [+wp.x.toFixed(2), +wp.y.toFixed(2), +wp.z.toFixed(2)] });
           }
         });
+        const directHits = ownMesh ? raycaster.current.intersectObject(ownMesh, true) : [];
         (window as unknown as Record<string, unknown>).__ownMeshCount = {
           mySessionId,
           totalFound: allOwnMeshes.length,
@@ -127,6 +128,14 @@ export function useInteraction() {
           rayOrigin: [+raycaster.current.ray.origin.x.toFixed(3), +raycaster.current.ray.origin.y.toFixed(3), +raycaster.current.ray.origin.z.toFixed(3)],
           rayDirection: [+raycaster.current.ray.direction.x.toFixed(3), +raycaster.current.ray.direction.y.toFixed(3), +raycaster.current.ray.direction.z.toFixed(3)],
           ndcUsed: [+ndcX.toFixed(3), +ndcY.toFixed(3)],
+          // [DEBUG TẠM] lấy CÙNG LÚC với toạ độ trên — tránh lệch giữa 2 lần
+          // lấy mẫu riêng (camera/ray đổi liên tục theo chuột).
+          directRaycastHits: directHits.length,
+          directRaycastFirstDistance: directHits[0] ? +directHits[0].distance.toFixed(3) : null,
+          raycasterNear: raycaster.current.near,
+          raycasterFar: raycaster.current.far,
+          cameraNear: (camera as THREE.PerspectiveCamera).near,
+          cameraFar: (camera as THREE.PerspectiveCamera).far,
         };
         if (ownMesh) {
           const sm = ownMesh as THREE.SkinnedMesh;
