@@ -24,17 +24,21 @@ import { connectToGame, disconnectFromGame } from "./net/colyseus";
 export default function Game() {
   const remotePlayers = useGameStore((s) => s.remotePlayers);
   const team = useGameStore((s) => s.team);
-
   useEffect(() => {
     connectToGame();
     return () => disconnectFromGame();
   }, []);
-
   return (
     <>
       <Canvas shadows camera={{ fov: 60 }}>
         <Suspense fallback={null}>
-          <Physics gravity={[0, -18, 0]} debug >
+          {/* Đã tắt "debug" — wireframe của Rapier (capsule/trục cam) từng
+              bật để chẩn đoán bug rơi xuyên sàn, vô tình bị raycast của
+              tính năng tô màu "trúng" trước cả mesh người thật (LineSegments
+              của wireframe luôn được intersectObjects() tính tới), khiến
+              rất nhiều vùng trên người "không tô được" dù raycast hoàn toàn
+              đúng. Không cần debug nữa — mọi bug vật lý đã xử lý xong. */}
+          <Physics gravity={[0, -18, 0]}>
             <ArtStudioScene />
             <Player />
             {Object.values(remotePlayers).map((p) => (
