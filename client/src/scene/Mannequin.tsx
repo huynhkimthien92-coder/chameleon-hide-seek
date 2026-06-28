@@ -49,7 +49,17 @@ export function Mannequin({
   // (không share) để mỗi player tô màu độc lập.
   useEffect(() => {
     if (!skinnedMesh) return;
-    skinnedMesh.material = new THREE.MeshStandardMaterial({ map: canvas.texture, roughness: 0.8 });
+    skinnedMesh.material = new THREE.MeshStandardMaterial({
+      map: canvas.texture,
+      roughness: 0.8,
+      // DoubleSide: raycaster mặc định CHỈ tính trúng mặt trước tam giác
+      // (FrontSide). Ở pose lệch nhiều (vd "Nằm", xoay 90°+), skinning có
+      // thể làm một số tam giác bị tính sai hướng pháp tuyến lúc raycast dù
+      // vẫn render bình thường (khác cơ chế GPU) -> raycast bỏ sót, đúng
+      // triệu chứng "thấy trắng nhưng không tô trúng". DoubleSide bỏ hẳn
+      // việc lọc theo hướng — an toàn cho mesh người đặc, không gây lệch gì.
+      side: THREE.DoubleSide,
+    });
     skinnedMesh.castShadow = castShadow;
     skinnedMesh.userData.isOwnBody = true;
     skinnedMesh.userData.ownerSessionId = sessionId;
