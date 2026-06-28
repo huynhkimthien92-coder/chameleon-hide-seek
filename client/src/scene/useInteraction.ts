@@ -74,6 +74,31 @@ export function useInteraction() {
     const playerPos = useGameStore.getState().localPosition;
     const playerVec = new THREE.Vector3(playerPos.x, playerPos.y, playerPos.z);
 
+    // [DEBUG TẠM] khi đang tô màu, ghi lại TOÀN BỘ hits thật mỗi ~150ms vào
+    // window.__paintDebug — để xem CHÍNH XÁC tại sao 1 điểm không tô được:
+    // không có hit nào (ray hụt hẳn), có hit nhưng không phải mesh người
+    // mình (vật khác chắn trước), hay có hit đúng mesh nhưng thiếu uv.
+    if (isPainting) {
+      const now = performance.now();
+      const w = window as unknown as { __paintDebugLast?: number };
+      if (!w.__paintDebugLast || now - w.__paintDebugLast > 150) {
+        w.__paintDebugLast = now;
+        (window as unknown as Record<string, unknown>).__paintDebug = {
+          ndcX: +ndcX.toFixed(3),
+          ndcY: +ndcY.toFixed(3),
+          totalHits: hits.length,
+          hits: hits.slice(0, 8).map((h) => ({
+            objectType: h.object.type,
+            objectName: h.object.name || "(no name)",
+            isOwnBody: !!h.object.userData?.isOwnBody,
+            ownerSessionId: h.object.userData?.ownerSessionId ?? null,
+            hasUV: !!h.uv,
+            distance: +h.distance.toFixed(3),
+          })),
+        };
+      }
+    }
+
     // --- Chế độ tô màu: GỘP hút màu (môi trường) + vẽ (người mình) ---
     if (isPainting) {
       const ownBodyHit = hits.find(
