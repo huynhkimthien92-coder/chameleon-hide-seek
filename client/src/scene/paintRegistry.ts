@@ -31,11 +31,13 @@ const registry = new Map<string, PlayerCanvas>();
  * hơn cả bán kính tối thiểu còn dùng được). Không sửa được UV gốc bằng code
  * (cần làm lại unwrap bằng Blender — việc của 3D artist).
  *
- * Giải pháp ở TẦNG VẼ: ảnh `paint_region_mask.png` (tạo offline từ chính
- * dữ liệu mesh thật — rasterize từng tam giác UV theo xương chủ đạo, gộp
- * thành 6 vùng macro: Đầu/Thân/TayTrái/TayPhải/ChânTrái/ChânPhải) cho biết
- * MỖI PIXEL trên texture thuộc vùng nào. Khi vẽ, chỉ tô pixel CÙNG VÙNG với
- * điểm bấm chuột — chặn hẳn việc lan màu sang vùng khác dù UV nằm sát nhau.
+ * Giải pháp ở TẦNG VẼ: ảnh `paint_region_mask.png` (tạo offline từ chính dữ
+ * liệu mesh thật — rasterize từng tam giác UV theo xương chủ đạo) cho biết
+ * MỖI PIXEL trên texture thuộc xương nào trong 22 xương — KHÔNG gộp nhóm
+ * (lần đầu gộp 6 vùng macro làm Hông+Ngực chung 1 vùng, gây lan màu ngực
+ * <-> háng — người dùng yêu cầu tự do hoàn toàn, không tự động gộp gì cả).
+ * Khi vẽ, chỉ tô pixel CÙNG XƯƠNG CHỦ ĐẠO với điểm bấm — chặn lan màu sang
+ * bất kỳ xương khác, kể cả 2 xương nối khớp tự nhiên (vd khuỷu tay).
  */
 const REGION_MASK_URL = "/textures/paint_region_mask.png";
 let regionMaskData: ImageData | null = null;
@@ -62,13 +64,14 @@ function ensureRegionMaskLoading() {
 }
 ensureRegionMaskLoading();
 
-/** Đọc region (0-5) tại 1 pixel, -1 nếu mask chưa tải xong. */
+/** Đọc region (0-21, ứng đúng 1 trong 22 xương) tại 1 pixel, -1 nếu mask
+ * chưa tải xong. Giá trị lưu RAW trong ảnh (không nhân hệ số gì). */
 function regionAt(px: number, py: number): number {
   if (!regionMaskData) return -1;
   const x = Math.max(0, Math.min(CANVAS_SIZE - 1, Math.floor(px)));
   const y = Math.max(0, Math.min(CANVAS_SIZE - 1, Math.floor(py)));
   const idx = (y * CANVAS_SIZE + x) * 4;
-  return Math.round(regionMaskData.data[idx] / 40); // khớp encode lúc tạo mask (region*40)
+  return regionMaskData.data[idx];
 }
 
 /** Convert bất kỳ chuỗi màu CSS hợp lệ (hex/rgb/named) sang [r,g,b] 0-255 —
