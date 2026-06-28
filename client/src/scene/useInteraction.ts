@@ -21,6 +21,94 @@ function findPlayerSessionId(object: THREE.Object3D | null): string | null {
   return null;
 }
 
+// Object tạm dùng lại giữa các lần gọi (tránh tạo mới mỗi frame, đỡ GC) —
+// CHỈ dùng trong manualRaycastOwnBody, không thread-safe nhưng code chạy
+// đơn luồng trong useFrame nên an toàn.
+const _invMatrix = new THREE.Matrix4();
+const _localRay = new THREE.Ray();
+const _vA = new THREE.Vector3();
+const _vB = new THREE.Vector3();
+const _vC = new THREE.Vector3();
+const _intersectPoint = new THREE.Vector3();
+const _bestPointLocal = new THREE.Vector3();
+const _uvA = new THREE.Vector2();
+const _uvB = new THREE.Vector2();
+const _uvC = new THREE.Vector2();
+const _bestUV = new THREE.Vector2();
+
+/**
+ * ⚠️ RAYCAST THỦ CÔNG riêng cho mesh người mình — KHÔNG dùng
+ * `raycaster.intersectObject()` built-in của Three.js cho mesh này nữa.
+ *
+ * Lý do: `Mesh.raycast()` built-in của Three.js (qua GLTFLoader nạp model
+ * nén Draco) trả về 0 hit một cách KHÔNG ỔN ĐỊNH cho riêng SkinnedMesh này
+ * — đã verify kỹ bằng số liệu thật suốt nhiều vòng debug (camera/ray tính
+ * tay xác nhận tia đi xuyên qua rất gần tâm bounding sphere của mesh, có
+ * lúc cách tâm chỉ ~0.24-0.26 unit trong khi bán kính bao là ~1.05 — chắc
+ * chắn phải trúng về hình học — nhưng `intersectObject()` vẫn trả 0 hit).
+ * Đã loại trừ hết: geometry/skin data hợp lệ (khớp byte-for-byte với dữ
+ * liệu gốc), material.side=DoubleSide đúng, layers khớp, bounding sphere
+ * đúng, world matrix hợp lệ — và quan trọng nhất: gọi trực tiếp
+ * `getVertexPosition()` (hàm LÕI mà raycast dùng để lấy vị trí vertex sau
+ * skinning) cho ra toạ độ HOÀN TOÀN HỢP LÝ. Tức là dữ liệu/hàm tính vị trí
+ * đều đúng — chỉ riêng logic raycast() cấp cao (tổ hợp DoubleSide + skinning
+ * + version Three.js này) có vấn đề, không rõ nguyên nhân sâu hơn (nghi
+ * liên quan đến cách Three.js xử lý bounding box/early-rejection cho
+ * SkinnedMesh nén Draco qua GLTFLoader — không tái hiện được trong môi
+ * trường Node để đào sâu hơn vì DRACOLoader cần Web Worker thật).
+ *
+ * Hàm này tự lặp qua TỪNG TAM GIÁC, dùng `mesh.getVertexPosition()` (đã
+ * verify đúng) lấy vị trí 3 đỉnh SAU skinning, rồi tự test giao cắt tia
+ * bằng `THREE.Ray.intersectTriangle()` (cùng hàm lõi mà Three.js dùng bên
+ * trong, chỉ là gọi trực tiếp, không qua lớp bounding-sphere/early-reject
+ * nghi có bug) — bỏ qua hoàn toàn `Mesh.raycast()`. Chi phí: ~4000 tam
+ * giác/lần gọi, ~1ms/frame — chấp nhận được cho riêng lúc đang tô màu.
+ */
+function manualRaycastOwnBody(
+  mesh: THREE.SkinnedMesh,
+  ray: THREE.Ray
+): { distance: number; uv: THREE.Vector2; point: THREE.Vector3 } | null {
+  const geometry = mesh.geometry;
+  const index = geometry.index;
+  const uvAttr = geometry.attributes.uv;
+  if (!index || !uvAttr) return null;
+
+  _invMatrix.copy(mesh.matrixWorld).invert();
+  _localRay.copy(ray).applyMatrix4(_invMatrix);
+
+  let closestDistSq = Infinity;
+  let found = false;
+
+  const idxArr = index.array;
+  for (let i = 0; i < idxArr.length; i += 3) {
+    const a = idxArr[i];
+    const b = idxArr[i + 1];
+    const c = idxArr[i + 2];
+    mesh.getVertexPosition(a, _vA);
+    mesh.getVertexPosition(b, _vB);
+    mesh.getVertexPosition(c, _vC);
+
+    const hit = _localRay.intersectTriangle(_vA, _vB, _vC, false, _intersectPoint);
+    if (!hit) continue;
+
+    const distSq = _localRay.origin.distanceToSquared(_intersectPoint);
+    if (distSq < closestDistSq) {
+      closestDistSq = distSq;
+      found = true;
+      _bestPointLocal.copy(_intersectPoint);
+    _uvA.fromBufferAttribute(uvAttr as THREE.BufferAttribute, a);
+    _uvB.fromBufferAttribute(uvAttr as THREE.BufferAttribute, b);
+    _uvC.fromBufferAttribute(uvAttr as THREE.BufferAttribute, c);
+      THREE.Triangle.getInterpolation(_intersectPoint, _vA, _vB, _vC, _uvA, _uvB, _uvC, _bestUV);
+    }
+  }
+
+  if (!found) return null;
+  const worldPoint = _bestPointLocal.clone().applyMatrix4(mesh.matrixWorld);
+  const distance = ray.origin.distanceTo(worldPoint);
+  return { distance, uv: _bestUV.clone(), point: worldPoint };
+}
+
 /**
  * Raycast liên tục.
  *
@@ -38,6 +126,11 @@ function findPlayerSessionId(object: THREE.Object3D | null): string | null {
  * 2 việc vào chung chế độ đứng yên thì người chơi canh góc 1 lần (thấy cả
  * người mình + tường cạnh đó), rồi hút màu + tô đều dùng đúng góc đó, không
  * còn phải xoay qua xoay lại giữa 2 bước.
+ *
+ * Vẽ lên NGƯỜI MÌNH dùng `manualRaycastOwnBody()` riêng (xem comment ở hàm
+ * đó) — KHÔNG nằm trong mảng `hits` chung. Hút màu MÔI TRƯỜNG vẫn dùng
+ * `hits` chung như cũ (raycast built-in hoạt động bình thường cho các mesh
+ * tĩnh của map, chỉ riêng SkinnedMesh người mới gặp vấn đề).
  */
 export function useInteraction() {
   const { camera, scene, gl } = useThree();
@@ -47,6 +140,7 @@ export function useInteraction() {
   const wasAimingOwnBody = useRef(false);
   const lastPaintAt = useRef(0);
   const cursorPx = useRef({ x: 0, y: 0 }); // vị trí con trỏ chuột THẬT (px), chỉ có ý nghĩa khi isPainting
+  const ownMeshRef = useRef<THREE.SkinnedMesh | null>(null);
 
   const setHoverColor = useGameStore((s) => s.setHoverColor);
   const setAimTarget = useGameStore((s) => s.setAimTarget);
@@ -74,174 +168,28 @@ export function useInteraction() {
     const playerPos = useGameStore.getState().localPosition;
     const playerVec = new THREE.Vector3(playerPos.x, playerPos.y, playerPos.z);
 
-    // [DEBUG TẠM] khi đang tô màu, ghi lại TOÀN BỘ hits thật mỗi ~150ms vào
-    // window.__paintDebug — để xem CHÍNH XÁC tại sao 1 điểm không tô được:
-    // không có hit nào (ray hụt hẳn), có hit nhưng không phải mesh người
-    // mình (vật khác chắn trước), hay có hit đúng mesh nhưng thiếu uv.
+    // --- Chế độ tô màu: GỘP hút màu (môi trường) + vẽ (người mình) ---
     if (isPainting) {
-      const now = performance.now();
-      const w = window as unknown as { __paintDebugLast?: number };
-      if (!w.__paintDebugLast || now - w.__paintDebugLast > 150) {
-        w.__paintDebugLast = now;
-        (window as unknown as Record<string, unknown>).__paintDebug = {
-          ndcX: +ndcX.toFixed(3),
-          ndcY: +ndcY.toFixed(3),
-          totalHits: hits.length,
-          hits: hits.slice(0, 8).map((h) => ({
-            objectType: h.object.type,
-            objectName: h.object.name || "(no name)",
-            isOwnBody: !!h.object.userData?.isOwnBody,
-            ownerSessionId: h.object.userData?.ownerSessionId ?? null,
-            hasUV: !!h.uv,
-            distance: +h.distance.toFixed(3),
-          })),
-        };
-
-        // [DEBUG TẠM #2] tìm TRỰC TIẾP SkinnedMesh của CHÍNH MÌNH (lọc cả
-        // isOwnBody VÀ ownerSessionId — isOwnBody=true bị set cho MỌI người
-        // chơi, không chỉ riêng mình, lọc thiếu ownerSessionId sẽ bắt nhầm
-        // mesh người khác). Đọc thẳng boundingSphere + world matrix + test
-        // raycast CHỈ riêng object đó.
-        let ownMesh: THREE.Object3D | null = null;
-        const allOwnMeshes: { uuid: string; worldPos: number[] }[] = [];
+      // Tìm lại mesh người mình nếu chưa có hoặc sessionId đổi (reconnect).
+      // Không tìm lại mỗi frame nếu đã có sẵn — đỡ traverse cả scene liên tục.
+      if (!ownMeshRef.current || ownMeshRef.current.userData?.ownerSessionId !== mySessionId) {
+        let found: THREE.SkinnedMesh | null = null;
         scene.traverse((o) => {
           if (
+            !found &&
             (o as THREE.SkinnedMesh).isSkinnedMesh &&
             o.userData?.isOwnBody &&
             o.userData?.ownerSessionId === mySessionId
           ) {
-            if (!ownMesh) ownMesh = o;
-            const wp = o.getWorldPosition(new THREE.Vector3());
-            allOwnMeshes.push({ uuid: o.uuid, worldPos: [+wp.x.toFixed(2), +wp.y.toFixed(2), +wp.z.toFixed(2)] });
+            found = o as THREE.SkinnedMesh;
           }
         });
-        const directHits = ownMesh ? raycaster.current.intersectObject(ownMesh, true) : [];
-        (window as unknown as Record<string, unknown>).__ownMeshCount = {
-          mySessionId,
-          totalFound: allOwnMeshes.length,
-          all: allOwnMeshes,
-          cameraPos: [+camera.position.x.toFixed(3), +camera.position.y.toFixed(3), +camera.position.z.toFixed(3)],
-          cameraDir: (() => {
-            const d = camera.getWorldDirection(new THREE.Vector3());
-            return [+d.x.toFixed(3), +d.y.toFixed(3), +d.z.toFixed(3)];
-          })(),
-          rayOrigin: [+raycaster.current.ray.origin.x.toFixed(3), +raycaster.current.ray.origin.y.toFixed(3), +raycaster.current.ray.origin.z.toFixed(3)],
-          rayDirection: [+raycaster.current.ray.direction.x.toFixed(3), +raycaster.current.ray.direction.y.toFixed(3), +raycaster.current.ray.direction.z.toFixed(3)],
-          ndcUsed: [+ndcX.toFixed(3), +ndcY.toFixed(3)],
-          // [DEBUG TẠM] lấy CÙNG LÚC với toạ độ trên — tránh lệch giữa 2 lần
-          // lấy mẫu riêng (camera/ray đổi liên tục theo chuột).
-          directRaycastHits: directHits.length,
-          directRaycastFirstDistance: directHits[0] ? +directHits[0].distance.toFixed(3) : null,
-          raycasterNear: raycaster.current.near,
-          raycasterFar: raycaster.current.far,
-          cameraNear: (camera as THREE.PerspectiveCamera).near,
-          cameraFar: (camera as THREE.PerspectiveCamera).far,
-          // [DEBUG TẠM] kiểm tra trực tiếp dữ liệu skinIndex/skinWeight THẬT
-          // trên geometry — nghi GLTFLoader đổi tên JOINTS_0/WEIGHTS_0 (glTF)
-          // -> skinIndex/skinWeight (three.js) bị lỗi/rỗng khi mesh dùng nén
-          // Draco, khiến applyBoneTransform() (dùng cho raycast CPU-side)
-          // tính sai vị trí vertex dù GPU vẫn render đúng (đường dữ liệu
-          // khác, không qua thuộc tính JS này).
-          skinDebug: ownMesh
-            ? (() => {
-                const sm = ownMesh as THREE.SkinnedMesh;
-                const geo = sm.geometry;
-                const hasSkinIndex = !!geo.attributes.skinIndex;
-                const hasSkinWeight = !!geo.attributes.skinWeight;
-                const sample = (attr: THREE.BufferAttribute | undefined, n: number) => {
-                  if (!attr) return null;
-                  const out: number[] = [];
-                  for (let i = 0; i < 4; i++) out.push(attr.getComponent(n, i));
-                  return out;
-                };
-                return {
-                  hasSkinIndex,
-                  hasSkinWeight,
-                  skinIndexSample_v0: sample(geo.attributes.skinIndex as THREE.BufferAttribute, 0),
-                  skinWeightSample_v0: sample(geo.attributes.skinWeight as THREE.BufferAttribute, 0),
-                };
-              })()
-            : null,
-          // [DEBUG TẠM] kiểm tra layers (mesh vs raycaster) + material.side
-          // THẬT đang áp dụng — 1 trong 2 lệch sẽ làm raycast luôn trả về 0
-          // dù mọi thứ khác đúng.
-          layersAndMaterial: (() => {
-            const om = ownMesh as THREE.SkinnedMesh | null;
-            if (!om) return null;
-            return {
-              meshLayersMask: om.layers.mask,
-              raycasterLayersMask: raycaster.current.layers.mask,
-              cameraLayersMask: camera.layers.mask,
-              materialSide: (om.material as THREE.Material)?.side,
-              materialType: (om.material as THREE.Material)?.type,
-              isArrayMaterial: Array.isArray(om.material),
-              geometryGroups: om.geometry.groups?.length ?? 0,
-              matrixAutoUpdate: om.matrixAutoUpdate,
-              matrixWorldNeedsUpdate: om.matrixWorldNeedsUpdate,
-            };
-          })(),
-          // [DEBUG TẠM — QUYẾT ĐỊNH] gọi TRỰC TIẾP getVertexPosition() — hàm
-          // LÕI mà raycast dùng để lấy vị trí vertex SAU skinning — bỏ qua
-          // hoàn toàn raycaster/camera/ray. Nếu vị trí trả về vô lý (NaN,
-          // Infinity, hoặc trùng nhau bất thường giữa các vertex khác nhau)
-          // -> xác nhận lỗi nằm trong applyBoneTransform()/skinning, không
-          // phải raycast. Nếu vị trí HỢP LÝ -> lỗi nằm ở bước khác (camera/
-          // ray/bounding test), cần xem lại hướng khác.
-          vertexPositionDebug: ownMesh
-            ? (() => {
-                const om = ownMesh as THREE.SkinnedMesh;
-                const indices = [0, 500, 1000, 1954, 3000, 3907];
-                const v = new THREE.Vector3();
-                return indices.map((i) => {
-                  om.getVertexPosition(i, v);
-                  return { index: i, localPos: [+v.x.toFixed(4), +v.y.toFixed(4), +v.z.toFixed(4)] };
-                });
-              })()
-            : null,
-        };
-        if (ownMesh) {
-          const sm = ownMesh as THREE.SkinnedMesh;
-          sm.geometry.computeBoundingSphere();
-          const bs = sm.geometry.boundingSphere;
-          const worldPos = sm.getWorldPosition(new THREE.Vector3());
-          const directHits = raycaster.current.intersectObject(sm, true);
-          (window as unknown as Record<string, unknown>).__meshDebug = {
-            uuid: sm.uuid,
-            boundingSphereCenter: bs ? [+bs.center.x.toFixed(3), +bs.center.y.toFixed(3), +bs.center.z.toFixed(3)] : null,
-            boundingSphereRadius: bs ? +bs.radius.toFixed(3) : null,
-            worldPos: [+worldPos.x.toFixed(3), +worldPos.y.toFixed(3), +worldPos.z.toFixed(3)],
-            frustumCulled: sm.frustumCulled,
-            visible: sm.visible,
-            directRaycastHits: directHits.length,
-            directRaycastFirstDistance: directHits[0] ? +directHits[0].distance.toFixed(3) : null,
-            // [DEBUG TẠM #3] kiểm tra geometry có hợp lệ không — rỗng/hỏng
-            // sẽ giải thích trực tiếp việc raycast luôn trượt.
-            vertexCount: sm.geometry.attributes.position?.count ?? null,
-            hasIndex: !!sm.geometry.index,
-            indexCount: sm.geometry.index?.count ?? null,
-            boneCount: sm.skeleton?.bones?.length ?? null,
-            matrixWorldElements: Array.from(sm.matrixWorld.elements).map((n) => +n.toFixed(3)),
-            parentChain: (() => {
-              const chain: string[] = [];
-              let p: THREE.Object3D | null = sm;
-              while (p) {
-                chain.push(`${p.type}${p.name ? "(" + p.name + ")" : ""}`);
-                p = p.parent;
-              }
-              return chain;
-            })(),
-          };
-        } else {
-          (window as unknown as Record<string, unknown>).__meshDebug = { error: "Không tìm thấy SkinnedMesh isOwnBody nào trong scene" };
-        }
+        ownMeshRef.current = found;
       }
-    }
 
-    // --- Chế độ tô màu: GỘP hút màu (môi trường) + vẽ (người mình) ---
-    if (isPainting) {
-      const ownBodyHit = hits.find(
-        (h) => h.object.userData?.isOwnBody && h.object.userData?.ownerSessionId === mySessionId && h.uv
-      );
+      const ownBodyHit = ownMeshRef.current
+        ? manualRaycastOwnBody(ownMeshRef.current, raycaster.current.ray)
+        : null;
 
       if (ownBodyHit?.uv) {
         // Đang nhắm vào người mình -> sẵn sàng vẽ, không hover môi trường nữa.
