@@ -103,16 +103,23 @@ export function useInteraction() {
         // mesh người khác). Đọc thẳng boundingSphere + world matrix + test
         // raycast CHỈ riêng object đó.
         let ownMesh: THREE.Object3D | null = null;
+        const allOwnMeshes: { uuid: string; worldPos: number[] }[] = [];
         scene.traverse((o) => {
           if (
-            !ownMesh &&
             (o as THREE.SkinnedMesh).isSkinnedMesh &&
             o.userData?.isOwnBody &&
             o.userData?.ownerSessionId === mySessionId
           ) {
-            ownMesh = o;
+            if (!ownMesh) ownMesh = o;
+            const wp = o.getWorldPosition(new THREE.Vector3());
+            allOwnMeshes.push({ uuid: o.uuid, worldPos: [+wp.x.toFixed(2), +wp.y.toFixed(2), +wp.z.toFixed(2)] });
           }
         });
+        (window as unknown as Record<string, unknown>).__ownMeshCount = {
+          mySessionId,
+          totalFound: allOwnMeshes.length,
+          all: allOwnMeshes,
+        };
         if (ownMesh) {
           const sm = ownMesh as THREE.SkinnedMesh;
           sm.geometry.computeBoundingSphere();
