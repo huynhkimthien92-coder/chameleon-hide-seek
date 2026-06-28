@@ -96,6 +96,34 @@ export function useInteraction() {
             distance: +h.distance.toFixed(3),
           })),
         };
+
+        // [DEBUG TẠM #2] tìm TRỰC TIẾP SkinnedMesh có isOwnBody trong toàn
+        // scene (không qua raycast), đọc thẳng boundingSphere + world
+        // matrix + test raycast CHỈ riêng object đó — cô lập xem lỗi nằm ở
+        // chính object này (bounding sphere/world matrix sai) hay ở khâu
+        // khác (scene traversal, thứ tự render...).
+        let ownMesh: THREE.Object3D | null = null;
+        scene.traverse((o) => {
+          if (!ownMesh && (o as THREE.SkinnedMesh).isSkinnedMesh && o.userData?.isOwnBody) ownMesh = o;
+        });
+        if (ownMesh) {
+          const sm = ownMesh as THREE.SkinnedMesh;
+          sm.geometry.computeBoundingSphere();
+          const bs = sm.geometry.boundingSphere;
+          const worldPos = sm.getWorldPosition(new THREE.Vector3());
+          const directHits = raycaster.current.intersectObject(sm, true);
+          (window as unknown as Record<string, unknown>).__meshDebug = {
+            boundingSphereCenter: bs ? [+bs.center.x.toFixed(3), +bs.center.y.toFixed(3), +bs.center.z.toFixed(3)] : null,
+            boundingSphereRadius: bs ? +bs.radius.toFixed(3) : null,
+            worldPos: [+worldPos.x.toFixed(3), +worldPos.y.toFixed(3), +worldPos.z.toFixed(3)],
+            frustumCulled: sm.frustumCulled,
+            visible: sm.visible,
+            directRaycastHits: directHits.length,
+            directRaycastFirstDistance: directHits[0] ? +directHits[0].distance.toFixed(3) : null,
+          };
+        } else {
+          (window as unknown as Record<string, unknown>).__meshDebug = { error: "Không tìm thấy SkinnedMesh isOwnBody nào trong scene" };
+        }
       }
     }
 
