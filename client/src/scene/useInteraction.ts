@@ -120,6 +120,7 @@ export function useInteraction() {
           const worldPos = sm.getWorldPosition(new THREE.Vector3());
           const directHits = raycaster.current.intersectObject(sm, true);
           (window as unknown as Record<string, unknown>).__meshDebug = {
+            uuid: sm.uuid,
             boundingSphereCenter: bs ? [+bs.center.x.toFixed(3), +bs.center.y.toFixed(3), +bs.center.z.toFixed(3)] : null,
             boundingSphereRadius: bs ? +bs.radius.toFixed(3) : null,
             worldPos: [+worldPos.x.toFixed(3), +worldPos.y.toFixed(3), +worldPos.z.toFixed(3)],
@@ -127,6 +128,22 @@ export function useInteraction() {
             visible: sm.visible,
             directRaycastHits: directHits.length,
             directRaycastFirstDistance: directHits[0] ? +directHits[0].distance.toFixed(3) : null,
+            // [DEBUG TẠM #3] kiểm tra geometry có hợp lệ không — rỗng/hỏng
+            // sẽ giải thích trực tiếp việc raycast luôn trượt.
+            vertexCount: sm.geometry.attributes.position?.count ?? null,
+            hasIndex: !!sm.geometry.index,
+            indexCount: sm.geometry.index?.count ?? null,
+            boneCount: sm.skeleton?.bones?.length ?? null,
+            matrixWorldElements: Array.from(sm.matrixWorld.elements).map((n) => +n.toFixed(3)),
+            parentChain: (() => {
+              const chain: string[] = [];
+              let p: THREE.Object3D | null = sm;
+              while (p) {
+                chain.push(`${p.type}${p.name ? "(" + p.name + ")" : ""}`);
+                p = p.parent;
+              }
+              return chain;
+            })(),
           };
         } else {
           (window as unknown as Record<string, unknown>).__meshDebug = { error: "Không tìm thấy SkinnedMesh isOwnBody nào trong scene" };
