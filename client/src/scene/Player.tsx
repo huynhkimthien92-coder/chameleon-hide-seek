@@ -8,6 +8,12 @@ import { Mannequin } from "./Mannequin";
 import { getPoseOffset, CAPSULE_GROUND_OFFSET } from "./poseTransform";
 
 const MOVE_SPEED = 4.5;
+// Cơ chế "Treo" (hover) — chỉ Hider dùng để ẩn nấp, giữ Q/E tự do trượt dọc,
+// KHÔNG cần đứng sát tường thật (raycast) theo yêu cầu — tự do mọi nơi.
+// Đi qua ĐÚNG pipeline KCC hiện có (desiredMovement.y -> computeColliderMovement)
+// để collider luôn di chuyển khớp đúng vị trí hiển thị (Seeker bắn trúng đúng chỗ).
+const HOVER_SPEED = 2; // unit/giây — tốc độ trượt lên/xuống lúc treo
+const MAX_HOVER_OFFSET = 2; // unit — độ cao tối đa được phép treo thêm so với lúc bắt đầu
 const MOUSE_SENSITIVITY = 0.0025;
 const GRAVITY = 18; // khớp Physics gravity={[0,-18,0]} trong App.tsx
 const MAX_FALL_SPEED = 12; // chặn vận tốc rơi tối đa — tránh tăng vô hạn khi rơi xa/lâu
@@ -53,6 +59,7 @@ export function Player() {
   const colliderRef = useRef<ComponentRef<typeof CapsuleCollider>>(null);
   const controllerRef = useRef<ReturnType<typeof world.createCharacterController> | null>(null);
   const verticalVelocity = useRef(0);
+  const hoverOffset = useRef(0); // độ cao đã "treo" thêm hiện tại (0..MAX_HOVER_OFFSET)
 
   const mannequinGroupRef = useRef<THREE.Group>(null);
   const yaw = useRef(0); // góc camera — luôn theo chuột (orbit tự do quanh nhân vật ở third-person)
@@ -280,12 +287,36 @@ export function Player() {
       if (horizontalInput.lengthSq() > 0) horizontalInput.normalize().multiplyScalar(MOVE_SPEED);
     }
 
-    // Gravity tự mô phỏng (kinematic body không được engine tự áp dụng).
-    verticalVelocity.current = Math.max(verticalVelocity.current - GRAVITY * delta, -MAX_FALL_SPEED);
+    // Cơ chế "Treo" (hover) — chỉ Hider, không áp dụng lúc đang vẽ (tay/host
+    // tập trung vào cọ vẽ). hoverOffset > 0 là tín hiệu DUY NHẤT cho biết
+    // đang treo — không cần cờ riêng: hết offset (về 0 qua giữ E) thì rơi
+    // bình thường lại ngay frame sau, không cần xử lý chuyển trạng thái.
+    const canHover = team !== "seeker" && !isPaintingNow;
+    let verticalDesired: number;
+    if (canHover && keys.current["KeyQ"]) {
+      const next = Math.min(hoverOffset.current + HOVER_SPEED * delta, MAX_HOVER_OFFSET);
+      verticalDesired = next - hoverOffset.current;
+      hoverOffset.current = next;
+      verticalVelocity.current = 0; // reset gravity tích lũy — tránh rơi mạnh ngay khi thả phím
+    } else if (canHover && keys.current["KeyE"] && hoverOffset.current > 0) {
+      const next = Math.max(hoverOffset.current - HOVER_SPEED * delta, 0);
+      verticalDesired = next - hoverOffset.current;
+      hoverOffset.current = next;
+      verticalVelocity.current = 0;
+    } else if (hoverOffset.current > 0) {
+      // Đang treo nhưng không giữ phím nào -> đứng yên tại chỗ, KHÔNG rơi
+      // (đúng yêu cầu "treo" — không phải nhảy tạm).
+      verticalDesired = 0;
+    } else {
+      // Bình thường: gravity tự mô phỏng (kinematic body không được engine
+      // tự áp dụng).
+      verticalVelocity.current = Math.max(verticalVelocity.current - GRAVITY * delta, -MAX_FALL_SPEED);
+      verticalDesired = verticalVelocity.current * delta;
+    }
 
     const desiredMovement = {
       x: horizontalInput.x * delta,
-      y: verticalVelocity.current * delta,
+      y: verticalDesired,
       z: horizontalInput.z * delta,
     };
 
