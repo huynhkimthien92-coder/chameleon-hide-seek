@@ -82,6 +82,8 @@ export async function connectToGame() {
     // Người khác vẽ -> vẽ lại lên đúng canvas của họ (xem paintRegistry.ts).
     // Không nhận lại nét của chính mình (server đã loại trừ — `except: client`).
     room.onMessage("paintStroke", (data: any) => {
+      // [DEBUG TẠM] xác nhận tin nhắn THẬT SỰ đến được client này.
+      console.log("[DEBUG] Nhận paintStroke từ người khác:", data);
       paintDab(data.sessionId, data.u, data.v, data.color, data.radius);
     });
 
