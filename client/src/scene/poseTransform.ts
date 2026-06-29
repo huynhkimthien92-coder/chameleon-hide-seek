@@ -12,7 +12,7 @@ export type Pose = "idle" | "crouch" | "lean" | "lay" | "freeze";
  * 2. Kích thước CapsuleCollider trong Player.tsx (`args={[...]}`).
  * Muốn đổi cỡ người: CHỈ sửa đúng số này, không sửa gì khác.
  */
-export const CHARACTER_SCALE = 0.75;
+export const CHARACTER_SCALE = 0.2;
 
 /**
  * ⚠️ CẬP NHẬT — sau khi thêm phép xoay bù `<group rotation={[Math.PI/2,0,0]}>`
