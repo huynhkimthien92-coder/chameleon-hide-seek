@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { sendLocalTransform } from "../net/colyseus";
 import { useGameStore } from "../store/useGameStore";
 import { Mannequin } from "./Mannequin";
-import { getPoseOffset, CAPSULE_GROUND_OFFSET } from "./poseTransform";
+import { getPoseOffset, CAPSULE_GROUND_OFFSET, CHARACTER_SCALE } from "./poseTransform";
 
 const MOVE_SPEED = 4.5;
 // Cơ chế "Treo" (hover) — chỉ Hider dùng để ẩn nấp, giữ Q/E tự do trượt dọc,
@@ -479,19 +479,21 @@ export function Player() {
 
   return (
     <RigidBody ref={bodyRef} type="kinematicPosition" colliders={false} position={[0, 1, 0]}>
-      {/* Bán kính 0.225 — KHÔNG phải số đoán: tính từ skinning thật (Draco
-          decode + linear blend skinning đúng pose idle tay-đã-hạ) trên file
-          mannequin.glb, bounding box thật cho bề ngang (vai-vai) = 0.4494 ->
-          nửa = 0.2247 (cạnh rộng nhất, quyết định bán kính capsule tròn cần
-          tối thiểu bao nhiêu để không lộ vai ra ngoài). halfHeight = 0.525
-          để giữ tổng halfHeight+radius=0.75 không đổi (khớp chiều cao thật
-          đo được 1.4986 ≈ 1.5, không ảnh hưởng CAPSULE_GROUND_OFFSET). */}
-      <CapsuleCollider ref={colliderRef} args={[0.525, 0.225]} />
+      {/* Bán kính 0.225, halfHeight 0.525 (tổng 0.75) là số đo thật ở
+          CHARACTER_SCALE=1 (xem comment gốc trong README/lịch sử — tính từ
+          skinning thật bằng Draco decode, bề ngang vai-vai = 0.4494 -> nửa
+          0.2247). Co theo ĐÚNG CHARACTER_SCALE (xem poseTransform.ts) để
+          collider luôn khớp đúng kích thước mesh đã co — đổi cỡ người chỉ
+          cần sửa CHARACTER_SCALE, không sửa 2 số này. */}
+      <CapsuleCollider
+        ref={colliderRef}
+        args={[0.525 * CHARACTER_SCALE, 0.225 * CHARACTER_SCALE]}
+      />
       <group
         ref={mannequinGroupRef}
         rotation={[pose.rotX, Math.PI, pose.rotZ]}
         position={[0, CAPSULE_GROUND_OFFSET + pose.posY, 0]}
-        scale={[1, pose.scaleY, 1]}
+        scale={[CHARACTER_SCALE, CHARACTER_SCALE * pose.scaleY, CHARACTER_SCALE]}
       >
         <Mannequin sessionId={sessionId ?? "local-pending"} pose={localPose} />
       </group>
