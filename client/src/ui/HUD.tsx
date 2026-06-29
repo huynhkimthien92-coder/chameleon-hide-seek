@@ -121,7 +121,7 @@ export function HUD() {
           Click vào màn hình để bắt đầu · WASD di chuyển · V đổi góc nhìn ·{" "}
           {team === "seeker"
             ? "Click trái để bắn"
-            : "Giữ Q/E để treo lên/xuống ẩn nấp · Bấm \"Tô màu\" để hút màu + tô lên người"}
+            : "Giữ Q/E để treo lên/xuống · ←/→ xoay người tại chỗ · Bấm \"Tô màu\" để hút màu + tô lên người"}
         </div>
       </div>
     </div>
