@@ -22,6 +22,9 @@ const MAX_HOVER_OFFSET = 2; // unit — độ cao tối đa được phép treo 
 // y riêng) lách xuống dưới CHÍNH bệ đó; muốn chặn đầy đủ mọi mặt sàn/bệ cần
 // raycast va chạm thật cho camera (phức tạp hơn nhiều, chưa làm ở đây).
 const MIN_CAMERA_Y = 0.15;
+// Tốc độ xoay tại chỗ bằng phím mũi tên (rad/giây) — xem chỗ dùng trong
+// useFrame, phần xử lý facingYaw.
+const ROTATE_SPEED = 2.5;
 const MOUSE_SENSITIVITY = 0.0025;
 const GRAVITY = 18; // khớp Physics gravity={[0,-18,0]} trong App.tsx
 const MAX_FALL_SPEED = 12; // chặn vận tốc rơi tối đa — tránh tăng vô hạn khi rơi xa/lâu
@@ -282,6 +285,14 @@ export function Player() {
       keys.current["KeyW"] || keys.current["KeyA"] || keys.current["KeyS"] || keys.current["KeyD"];
     if (isFirstPerson.current || team === "seeker" || isMoving) {
       facingYaw.current = yaw.current;
+    } else if (!useGameStore.getState().isPainting) {
+      // Xoay người TẠI CHỖ (không di chuyển vị trí) bằng mũi tên trái/phải —
+      // dùng để chỉnh hướng đứng khớp màu/hoa văn xung quanh lúc camo, không
+      // cần bước đi vòng (dễ lộ vị trí). Chỉ Hider, không lúc đang vẽ (đã có
+      // chế độ đứng yên riêng của nó). Không dùng A/D vì đó đã là di chuyển
+      // ngang; không dùng Q/E vì đã là cơ chế "Treo" (xem HOVER_SPEED).
+      if (keys.current["ArrowLeft"]) facingYaw.current -= ROTATE_SPEED * delta;
+      if (keys.current["ArrowRight"]) facingYaw.current += ROTATE_SPEED * delta;
     }
 
     // Hướng di chuyển theo facingYaw (hướng nhân vật thật, không phải góc camera)
