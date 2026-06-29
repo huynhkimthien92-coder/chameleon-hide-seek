@@ -1,6 +1,20 @@
 export type Pose = "idle" | "crouch" | "lean" | "lay" | "freeze";
 
 /**
+ * ⚠️ TỈ LỆ NHÂN VẬT — co đồng đều CẢ hình ảnh VÀ vùng va chạm (collider) để
+ * dễ ẩn nấp hơn. Áp dụng tại ĐÚNG 1 chỗ (group bọc Mannequin trong
+ * Player.tsx, xem `scale={[CHARACTER_SCALE, ...]}`) — nhờ đặt ở lớp NGOÀI
+ * CÙNG, mọi thứ BÊN TRONG (NEW_FIX, Z_OFFSET trong Mannequin.tsx, các
+ * quaternion ARM_DOWN/LEG_BEND trong poseBones.ts) KHÔNG cần đổi gì — chúng
+ * là số xoay/offset cục bộ, group cha co tỉ lệ thì tự động co theo, không
+ * phải tính lại FK. CHỈ 2 thứ phải co tay theo ĐÚNG CHARACTER_SCALE này:
+ * 1. CAPSULE_GROUND_OFFSET ngay dưới đây (vị trí group so với tâm capsule).
+ * 2. Kích thước CapsuleCollider trong Player.tsx (`args={[...]}`).
+ * Muốn đổi cỡ người: CHỈ sửa đúng số này, không sửa gì khác.
+ */
+export const CHARACTER_SCALE = 0.75;
+
+/**
  * ⚠️ CẬP NHẬT — sau khi thêm phép xoay bù `<group rotation={[Math.PI/2,0,0]}>`
  * trong Mannequin.tsx (bind pose gốc của file `.glb` tự nó nằm ngang, xem
  * comment ở đó), mốc "feet tại local Y=0" KHÔNG còn đúng nữa — hình học đã
@@ -11,8 +25,13 @@ export type Pose = "idle" | "crouch" | "lean" | "lay" | "freeze";
  * theo CapsuleCollider halfHeight 0.42+radius 0.33), offset cần =
  * -0.75 - toe_Y = -0.75 - (-0.9153) ≈ 0.1653 (LƯU Ý: đổi dấu hẳn so với giá
  * trị cũ -0.75 — bình thường, vì hình học đã xoay hẳn 90°, không phải lỗi).
+ * Sau đó tinh chỉnh tay xuống 0.1 (bù khoảng hở đế giày, đo bằng mắt).
+ *
+ * GIỜ co theo CHARACTER_SCALE — vì cả collider (xem CapsuleCollider trong
+ * Player.tsx) VÀ mesh đều co cùng tỉ lệ, offset này co tuyến tính theo
+ * CÙNG hệ số (xem giải thích đầy đủ ở CHARACTER_SCALE phía trên).
  */
-export const CAPSULE_GROUND_OFFSET = 0.1;
+export const CAPSULE_GROUND_OFFSET = 0.1 * CHARACTER_SCALE;
 
 export type PoseOffset = {
   scaleY: number;
@@ -36,7 +55,8 @@ export function getPoseOffset(pose: Pose): PoseOffset {
       // Mannequin.tsx, offset đó bị pose "lay" xoay trộn vào trục Y (vì lay
       // xoay cả khối quanh X). Tính lại bằng FK đầy đủ (gồm Z_OFFSET):
       // posY = -0.7601 (không phải -0.0777 như tính thiếu Z_OFFSET trước đó).
-      return { scaleY: 1, posY: -0.7601, rotX: -Math.PI / 2, rotZ: 0 };
+      // GIỜ co theo CHARACTER_SCALE — cùng lý do với CAPSULE_GROUND_OFFSET.
+      return { scaleY: 1, posY: -0.7601 * CHARACTER_SCALE, rotX: -Math.PI / 2, rotZ: 0 };
     case "crouch":
     case "freeze":
     case "idle":
