@@ -14,6 +14,14 @@ const MOVE_SPEED = 4.5;
 // để collider luôn di chuyển khớp đúng vị trí hiển thị (Seeker bắn trúng đúng chỗ).
 const HOVER_SPEED = 2; // unit/giây — tốc độ trượt lên/xuống lúc treo
 const MAX_HOVER_OFFSET = 2; // unit — độ cao tối đa được phép treo thêm so với lúc bắt đầu
+// Chặn camera Third Person lách xuống DƯỚI sàn chính (world Y=0) khi cúi
+// camera (pitch) cực sâu — công thức orbit cũ không kiểm tra va chạm, có
+// thể đẩy camera xuống y âm, tạo ra góc nhìn "từ dưới sàn nhìn lên" (exploit
+// nhìn xuyên sàn/thấy người khác không đúng thiết kế). LƯU Ý: chỉ chặn theo
+// SÀN CHÍNH (y=0) — KHÔNG bảo vệ được lúc đứng trên bệ/sàn nổi (platform có
+// y riêng) lách xuống dưới CHÍNH bệ đó; muốn chặn đầy đủ mọi mặt sàn/bệ cần
+// raycast va chạm thật cho camera (phức tạp hơn nhiều, chưa làm ở đây).
+const MIN_CAMERA_Y = 0.15;
 const MOUSE_SENSITIVITY = 0.0025;
 const GRAVITY = 18; // khớp Physics gravity={[0,-18,0]} trong App.tsx
 const MAX_FALL_SPEED = 12; // chặn vận tốc rơi tối đa — tránh tăng vô hạn khi rơi xa/lâu
@@ -156,7 +164,14 @@ export function Player() {
     };
     const onKeyDown = (e: KeyboardEvent) => {
       keys.current[e.code] = true;
-      if (e.code === "KeyV") isFirstPerson.current = !isFirstPerson.current;
+      if (e.code === "KeyV") {
+        // ⚠️ CHỐT — Seeker chỉ được First Person, không cho đổi nữa (trước
+        // đây để mở vì "tiện test/debug, khoá cứng để Giai đoạn 4 quyết
+        // định" — giờ đã chốt: khoá cứng). Hider vẫn tự do đổi qua lại.
+        if (useGameStore.getState().team !== "seeker") {
+          isFirstPerson.current = !isFirstPerson.current;
+        }
+      }
       if (e.code === "Escape" && useGameStore.getState().isPainting) {
         useGameStore.getState().setIsPainting(false);
       }
@@ -467,7 +482,8 @@ export function Player() {
       const verticalOffset = distance * Math.sin(pitch.current);
       const camX = next.x - Math.sin(yaw.current) * horizontalDist;
       const camZ = next.z - Math.cos(yaw.current) * horizontalDist;
-      camera.position.set(camX, next.y - 0.08 + verticalOffset, camZ);
+      const camY = Math.max(next.y - 0.08 + verticalOffset, MIN_CAMERA_Y);
+      camera.position.set(camX, camY, camZ);
       camera.lookAt(next.x, next.y - 0.08, next.z);
     }
 
