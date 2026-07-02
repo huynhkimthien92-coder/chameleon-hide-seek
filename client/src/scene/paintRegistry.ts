@@ -96,7 +96,11 @@ function createPlayerCanvas(): PlayerCanvas {
   const canvas = document.createElement("canvas");
   canvas.width = CANVAS_SIZE;
   canvas.height = CANVAS_SIZE;
-  const ctx = canvas.getContext("2d")!;
+  // willReadFrequently: canvas này bị paintDab (và paintDab3D trong
+  // paint3dClient.ts) gọi getImageData/putImageData liên tục mỗi nét cọ —
+  // đúng loại "multiple readback operations" browser cảnh báo. Phải set ở
+  // đây, lần getContext("2d") ĐẦU TIÊN — không sửa được ở nơi khác sau này.
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   ctx.fillStyle = BASE_COLOR;
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
   const texture = new THREE.CanvasTexture(canvas);

@@ -18,7 +18,13 @@ export function getSampleableCanvas(texture: THREE.Texture | null | undefined): 
   const canvas = document.createElement("canvas");
   canvas.width = image.width;
   canvas.height = image.height;
-  const ctx = canvas.getContext("2d");
+  // willReadFrequently: canvas này bị sampleCanvasAtUV gọi getImageData MỖI
+  // FRAME trong lúc hover chọn màu môi trường (isPainting=true, useFrame trong
+  // useInteraction.ts) — không phải lâu lâu 1 lần. Phải set NGAY LÚC TẠO
+  // context, vì browser chỉ áp option này ở lần getContext("2d") ĐẦU TIÊN cho
+  // 1 canvas — gọi lại getContext("2d") sau đó (như trong sampleCanvasAtUV)
+  // chỉ trả về context đã có, không đổi được option nữa.
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return undefined;
   ctx.drawImage(image, 0, 0);
 

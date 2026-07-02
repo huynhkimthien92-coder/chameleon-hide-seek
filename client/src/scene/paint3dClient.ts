@@ -83,7 +83,7 @@ function cssColorToRgb(color: string): [number, number, number] {
   if (hit) return hit;
   const c = document.createElement("canvas");
   c.width = c.height = 1;
-  const ctx = c.getContext("2d")!;
+  const ctx = c.getContext("2d", { willReadFrequently: true })!;
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, 1, 1);
   const d = ctx.getImageData(0, 0, 1, 1).data;
@@ -109,17 +109,39 @@ export function paintDab3D(
   const dab = computeDab3D(positionMap, bindPoint.x, bindPoint.y, bindPoint.z, radius, scratch);
   if (dab.count === 0) return;
 
+  // Bounding box của các texel THẬT SỰ bị tô — tránh đọc/ghi cả 512x512 mỗi
+  // dab (đây là nguyên nhân warning "Multiple readback operations...
+  // willReadFrequently" bắn liên tục: bản đầu đọc/ghi NGUYÊN canvas mỗi nét
+  // cọ, trong khi bản paintDab gốc (region-mask) đã tối ưu bbox từ đầu —
+  // bản 3D này bỏ sót, giờ sửa lại đúng pattern cũ).
+  const size = CANVAS_SIZE;
+  let xMin = size, xMax = -1, yMin = size, yMax = -1;
+  for (let k = 0; k < dab.count; k++) {
+    const t = dab.paintedTexels[k];
+    const x = t % size;
+    const y = (t / size) | 0;
+    if (x < xMin) xMin = x;
+    if (x > xMax) xMax = x;
+    if (y < yMin) yMin = y;
+    if (y > yMax) yMax = y;
+  }
+  const w = xMax - xMin + 1;
+  const h = yMax - yMin + 1;
+
   const pc = getOrCreatePlayerCanvas(sessionId);
-  const img = pc.ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  const img = pc.ctx.getImageData(xMin, yMin, w, h);
   const [r, g, b] = cssColorToRgb(color);
   for (let k = 0; k < dab.count; k++) {
-    const i = dab.paintedTexels[k] * 4;
+    const t = dab.paintedTexels[k];
+    const localX = (t % size) - xMin;
+    const localY = ((t / size) | 0) - yMin;
+    const i = (localY * w + localX) * 4;
     img.data[i] = r;
     img.data[i + 1] = g;
     img.data[i + 2] = b;
     img.data[i + 3] = 255;
   }
-  pc.ctx.putImageData(img, 0, 0);
+  pc.ctx.putImageData(img, xMin, yMin);
   pc.texture.needsUpdate = true;
 }
 
