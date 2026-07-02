@@ -50,7 +50,7 @@ type GameStore = {
   // với môi trường xung quanh — đúng mục đích cốt lõi của camo.
   isPainting: boolean;
   isAimingOwnBody: boolean; // đang nhắm đúng người mình (sẵn sàng vẽ) trong lúc isPainting
-  brushSize: number; // bán kính nét cọ, đơn vị UV (0..1) — chỉnh bằng thanh trượt trong ColorPickerUI
+  brushSize: number; // bán kính nét cọ 3D, đơn vị local mesh (cao ~1.9) — chỉnh bằng thanh trượt trong ColorPickerUI
 
   // Pose System
   localPose: Pose;
@@ -110,7 +110,7 @@ export const useGameStore = create<GameStore>((set) => ({
 
   isPainting: false,
   isAimingOwnBody: false,
-  brushSize: 0.05,
+  brushSize: 0.1,
 
   localPose: "idle",
 
