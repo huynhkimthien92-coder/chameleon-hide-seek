@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { useGameStore } from "../store/useGameStore";
 import { sampleCanvasAtUV, getSampleableCanvas } from "./colorSampling";
 import { sendShoot, sendPaintStroke } from "../net/colyseus";
-import { paintDab } from "./paintRegistry";
+import { paintDab3D, interpolateBindPosition } from "./paint3dClient";
 import { sfx } from "../audio/sounds";
 
 const PICK_RANGE = 6; // mét — tầm hút màu tối đa (đo từ NHÂN VẬT, không phải camera)
@@ -35,6 +35,12 @@ const _uvA = new THREE.Vector2();
 const _uvB = new THREE.Vector2();
 const _uvC = new THREE.Vector2();
 const _bestUV = new THREE.Vector2();
+const _bestBind = new THREE.Vector3();
+
+// index 3 đỉnh của tam giác trúng gần nhất
+let _bestTriA = -1;
+let _bestTriB = -1;
+let _bestTriC = -1;
 
 /**
  * ⚠️ RAYCAST THỦ CÔNG riêng cho mesh người mình — KHÔNG dùng
@@ -67,7 +73,7 @@ const _bestUV = new THREE.Vector2();
 function manualRaycastOwnBody(
   mesh: THREE.SkinnedMesh,
   ray: THREE.Ray
-): { distance: number; uv: THREE.Vector2; point: THREE.Vector3 } | null {
+): {distance: number; uv: THREE.Vector2; point: THREE.Vector3; bindPoint: THREE.Vector3;} | null {
   const geometry = mesh.geometry;
   const index = geometry.index;
   const uvAttr = geometry.attributes.uv;
@@ -77,6 +83,7 @@ function manualRaycastOwnBody(
   _localRay.copy(ray).applyMatrix4(_invMatrix);
 
   let closestDistSq = Infinity;
+  _bestTriA = _bestTriB = _bestTriC = -1;
   let found = false;
 
   const idxArr = index.array;
@@ -95,18 +102,52 @@ function manualRaycastOwnBody(
     if (distSq < closestDistSq) {
       closestDistSq = distSq;
       found = true;
+
       _bestPointLocal.copy(_intersectPoint);
-    _uvA.fromBufferAttribute(uvAttr as THREE.BufferAttribute, a);
-    _uvB.fromBufferAttribute(uvAttr as THREE.BufferAttribute, b);
-    _uvC.fromBufferAttribute(uvAttr as THREE.BufferAttribute, c);
-      THREE.Triangle.getInterpolation(_intersectPoint, _vA, _vB, _vC, _uvA, _uvB, _uvC, _bestUV);
+
+      _bestTriA = a;
+      _bestTriB = b;
+      _bestTriC = c;
+
+      _uvA.fromBufferAttribute(uvAttr as THREE.BufferAttribute, a);
+      _uvB.fromBufferAttribute(uvAttr as THREE.BufferAttribute, b);
+      _uvC.fromBufferAttribute(uvAttr as THREE.BufferAttribute, c);
+
+      THREE.Triangle.getInterpolation(
+        _intersectPoint,
+        _vA,
+        _vB,
+        _vC,
+        _uvA,
+        _uvB,
+        _uvC,
+        _bestUV
+      );
     }
   }
 
   if (!found) return null;
+  
+  // Lấy lại 3 đỉnh của tam giác tốt nhất
+  mesh.getVertexPosition(_bestTriA, _vA);
+  mesh.getVertexPosition(_bestTriB, _vB);
+  mesh.getVertexPosition(_bestTriC, _vC);
+  
+  // Nội suy vị trí bind-pose
+  interpolateBindPosition(
+    geometry,
+    _bestTriA,
+    _bestTriB,
+    _bestTriC,
+    _vA,
+    _vB,
+    _vC,
+    _bestPointLocal,
+    _bestBind
+  );
   const worldPoint = _bestPointLocal.clone().applyMatrix4(mesh.matrixWorld);
   const distance = ray.origin.distanceTo(worldPoint);
-  return { distance, uv: _bestUV.clone(), point: worldPoint };
+  return { distance, uv: _bestUV.clone(), point: worldPoint, bindPoint: _bestBind.clone()};
 }
 
 /**
@@ -208,8 +249,10 @@ export function useInteraction() {
           const now = performance.now();
           if (heldColor && now - lastPaintAt.current >= PAINT_INTERVAL_MS) {
             lastPaintAt.current = now;
-            paintDab(mySessionId ?? "local-pending", ownBodyHit.uv.x, ownBodyHit.uv.y, heldColor, brushSize);
-            sendPaintStroke(ownBodyHit.uv.x, ownBodyHit.uv.y, heldColor, brushSize);
+
+            const bp = ownBodyHit.bindPoint;
+            paintDab3D(mySessionId ?? "local-pending",bp,heldColor,brushSize);
+            sendPaintStroke(bp.x,bp.y,bp.z,heldColor,brushSize);
           }
         }
         return;
