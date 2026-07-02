@@ -1,0 +1,18 @@
+{
+  "size": 512,
+  "channels": 3,
+  "dtype": "float32",
+  "layout": "row-major, y=0 là đỉnh ảnh (v gần 1), khớp canvas paintRegistry",
+  "coverage_pct": 55.05,
+  "bbox_min": [
+    -0.25612035393714905,
+    -0.8750292658805847,
+    -1.0031177997589111
+  ],
+  "bbox_max": [
+    0.2629099190235138,
+    0.8710188865661621,
+    0.9863511919975281
+  ],
+  "source": "mannequin.glb mesh[0] POSITION (bind-pose, chưa skin)"
+}
