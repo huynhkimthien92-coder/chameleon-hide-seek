@@ -56,18 +56,21 @@ export function ColorPickerUI() {
           : 'Bấm "Tô màu" để bắt đầu'}
       </div>
 
-      {/* Cỡ cọ — chỉ cần lúc đang tô màu, cuộn chuột để zoom cũng ở đây luôn */}
       {isPainting && (
         <div className="flex items-center gap-2 bg-base rounded-pill px-3 py-1.5">
           <span
             className="rounded-full bg-ink/40 shrink-0"
-            style={{ width: 6 + brushSize * 60, height: 6 + brushSize * 60 }}
+            style={{
+              width: 6 + brushSize * 36,
+              height: 6 + brushSize * 36,
+            }}
           />
+
           <input
             type="range"
-            min={0.02}
-            max={0.15}
-            step={0.005}
+            min={0.04}
+            max={0.25}
+            step={0.01}
             value={brushSize}
             onChange={(e) => setBrushSize(Number(e.target.value))}
             className="w-24 accent-accent"
@@ -80,7 +83,11 @@ export function ColorPickerUI() {
         onClick={togglePaint}
         className={`flex items-center gap-1.5 font-display font-bold text-sm px-4 py-2 rounded-pill transition
           active:translate-y-[2px] active:shadow-none
-          ${isPainting ? "bg-primary text-white shadow-hard-primary" : "bg-accent text-white shadow-hard-accent"}`}
+          ${
+            isPainting
+              ? "bg-primary text-white shadow-hard-primary"
+              : "bg-accent text-white shadow-hard-accent"
+          }`}
       >
         {isPainting ? <X size={16} /> : <Palette size={16} />}
         {isPainting ? "Xong" : "Tô màu"}
