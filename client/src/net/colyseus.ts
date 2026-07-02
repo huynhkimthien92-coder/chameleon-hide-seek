@@ -1,8 +1,11 @@
 import { Client, getStateCallbacks, type Room } from "@colyseus/sdk";
 import { useGameStore } from "../store/useGameStore";
 import type { Pose } from "../scene/poseTransform";
-import type { Stroke } from "../scene/paintRegistry";
-import { paintDab, replayStrokes } from "../scene/paintRegistry";
+import {
+  paintDab3D,
+  replayStrokes3D,
+  type Stroke3D,
+} from "../scene/paint3dClient";
 
 const SERVER_URL = import.meta.env.VITE_COLYSEUS_URL ?? "ws://localhost:2567";
 
@@ -27,32 +30,44 @@ export async function connectToGame() {
     const $ = getStateCallbacks(room);
 
     // --- Match info top-level (vision.md mục 3) ---
-    $(room.state).listen("phase", (value: any) => useGameStore.getState().setPhase(value), true);
+    $(room.state).listen(
+      "phase",
+      (value: any) => useGameStore.getState().setPhase(value),
+      true
+    );
+
     $(room.state).listen(
       "prepSecondsLeft",
       (value: any) => useGameStore.getState().setPrepSecondsLeft(value),
       true
     );
+
     $(room.state).listen(
       "matchSecondsLeft",
       (value: any) => useGameStore.getState().setMatchSecondsLeft(value),
       true
     );
-    $(room.state).listen("winner", (value: any) => useGameStore.getState().setWinner(value), true);
+
+    $(room.state).listen(
+      "winner",
+      (value: any) => useGameStore.getState().setWinner(value),
+      true
+    );
 
     $(room.state).players.onAdd((player: any, sessionId: string) => {
       const isLocal = sessionId === room?.sessionId;
-      useGameStore.getState().setPlayerCount(room?.state.players.size ?? 0);
+      useGameStore.getState().setPlayerCount(
+        room?.state.players.size ?? 0
+      );
 
       if (isLocal) {
-        // State authoritative của CHÍNH player này — team/ammo/eliminated do
-        // server quyết định, client không tự suy ra.
         const syncSelf = () => {
           const s = useGameStore.getState();
           s.setTeam(player.team);
           s.setAmmo(player.ammo);
           s.setEliminated(player.eliminated);
         };
+
         syncSelf();
         $(player).onChange(syncSelf);
         return;
@@ -74,25 +89,39 @@ export async function connectToGame() {
       $(player).onChange(sync);
     });
 
-    $(room.state).players.onRemove((_player: any, sessionId: string) => {
-      useGameStore.getState().removeRemotePlayer(sessionId);
-      useGameStore.getState().setPlayerCount(room?.state.players.size ?? 0);
-    });
-
-    // Người khác vẽ -> vẽ lại lên đúng canvas của họ (xem paintRegistry.ts).
-    // Không nhận lại nét của chính mình (server đã loại trừ — `except: client`).
-    room.onMessage("paintStroke", (data: any) => {
-      // [DEBUG TẠM] xác nhận tin nhắn THẬT SỰ đến được client này.
-      console.log("[DEBUG] Nhận paintStroke từ người khác:", data);
-      paintDab(data.sessionId, data.u, data.v, data.color, data.radius);
-    });
-
-    // Catch-up lúc mới vào phòng: vẽ lại toàn bộ nét đã có của mọi người.
-    room.onMessage("paintHistoryBatch", (history: Record<string, Stroke[]>) => {
-      for (const [sessionId, strokes] of Object.entries(history)) {
-        replayStrokes(sessionId, strokes);
+    $(room.state).players.onRemove(
+      (_player: any, sessionId: string) => {
+        useGameStore.getState().removeRemotePlayer(sessionId);
+        useGameStore.getState().setPlayerCount(
+          room?.state.players.size ?? 0
+        );
       }
+    );
+
+    // Người khác vẽ -> replay theo tọa độ bind-pose 3D.
+    // Server dùng except: client nên không nhận lại nét của chính mình.
+    room.onMessage("paintStroke", (data: any) => {
+      paintDab3D(
+        data.sessionId,
+        {
+          x: data.x,
+          y: data.y,
+          z: data.z,
+        },
+        data.color,
+        data.radius
+      );
     });
+
+    // Catch-up khi vừa vào phòng.
+    room.onMessage(
+      "paintHistoryBatch",
+      (history: Record<string, Stroke3D[]>) => {
+        for (const [sessionId, strokes] of Object.entries(history)) {
+          replayStrokes3D(sessionId, strokes);
+        }
+      }
+    );
 
     room.onLeave(() => {
       useGameStore.getState().setConnectionStatus("idle");
@@ -104,17 +133,36 @@ export async function connectToGame() {
 }
 
 /** Gọi mỗi frame từ Player controller — tự throttle bên trong. */
-export function sendLocalTransform(x: number, y: number, z: number, rotY: number) {
+export function sendLocalTransform(
+  x: number,
+  y: number,
+  z: number,
+  rotY: number
+) {
   if (!room) return;
+
   const now = performance.now();
   if (now - lastSentAt < SEND_INTERVAL_MS) return;
+
   lastSentAt = now;
   room.send("move", { x, y, z, rotY });
 }
 
-/** Gửi 1 nét vẽ (chấm cọ) — gọi liên tục lúc kéo chuột vẽ, đã throttle ở phía gọi (useInteraction.ts). */
-export function sendPaintStroke(u: number, v: number, color: string, radius: number) {
-  room?.send("paintStroke", { u, v, color, radius });
+/** Gửi 1 chấm cọ theo tọa độ bind-pose 3D. */
+export function sendPaintStroke(
+  x: number,
+  y: number,
+  z: number,
+  color: string,
+  radius: number
+) {
+  room?.send("paintStroke", {
+    x,
+    y,
+    z,
+    color,
+    radius,
+  });
 }
 
 /** Gửi 1 lần khi người chơi đổi pose. */
@@ -122,9 +170,11 @@ export function sendPose(pose: Pose) {
   room?.send("pose", { pose });
 }
 
-/** Seeker bắn — targetSessionId là kết quả raycast phía client, server tự validate lại. */
+/** Seeker bắn — server sẽ tự validate lại. */
 export function sendShoot(targetSessionId: string | null) {
-  room?.send("shoot", { targetSessionId: targetSessionId ?? undefined });
+  room?.send("shoot", {
+    targetSessionId: targetSessionId ?? undefined,
+  });
 }
 
 export function disconnectFromGame() {
