@@ -19,9 +19,20 @@ const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const VALID_POSES = ["idle", "crouch", "lean", "lay", "freeze"] as const;
 
 const MAX_STROKES_PER_PLAYER = 2000; // giới hạn bộ nhớ — cũ nhất bị bỏ khi vượt
+// Biên hợp lệ cho tọa độ bind-pose 3D
+const PAINT_COORD_LIMIT = 2;
+
+// Giới hạn bán kính cọ phía server
+const PAINT_RADIUS_MAX = 0.5;
 
 type MoveMessage = { x: number; y: number; z: number; rotY: number };
-type PaintStrokeMessage = { u: number; v: number; color: string; radius: number };
+type PaintStrokeMessage = {
+  x: number;
+  y: number;
+  z: number;
+  color: string;
+  radius: number;
+};
 type PoseMessage = { pose: string };
 type ShootMessage = { targetSessionId?: string };
 
@@ -84,25 +95,54 @@ export class GameRoom extends Room<{ state: GameState }> {
       const player = this.state.players.get(client.sessionId);
       if (!player) return;
 
-      // Validate chặt — đây là input người dùng gửi lên, không tin tưởng mù quáng.
       if (!HEX_COLOR_RE.test(message?.color)) return;
-      if (typeof message?.u !== "number" || message.u < 0 || message.u > 1) return;
-      if (typeof message?.v !== "number" || message.v < 0 || message.v > 1) return;
-      if (typeof message?.radius !== "number" || message.radius <= 0 || message.radius > 0.5) return;
+
+      const validCoord = (n: unknown): n is number =>
+        typeof n === "number" &&
+        Number.isFinite(n) &&
+        Math.abs(n) <= PAINT_COORD_LIMIT;
+
+      if (
+        !validCoord(message?.x) ||
+        !validCoord(message?.y) ||
+        !validCoord(message?.z)
+      ) {
+        return;
+      }
+
+      if (
+        typeof message?.radius !== "number" ||
+        message.radius <= 0 ||
+        message.radius > PAINT_RADIUS_MAX
+      ) {
+        return;
+      }
 
       const stroke: PaintStrokeMessage = {
-        u: message.u,
-        v: message.v,
+        x: message.x,
+        y: message.y,
+        z: message.z,
         color: message.color,
         radius: message.radius,
       };
 
       const history = (this.paintHistory[client.sessionId] ??= []);
       history.push(stroke);
-      if (history.length > MAX_STROKES_PER_PLAYER) history.shift();
 
-      // Không gửi lại cho chính người vẽ — họ đã tự vẽ optimistic ở client rồi.
-      this.broadcast("paintStroke", { sessionId: client.sessionId, ...stroke }, { except: client });
+      if (history.length > MAX_STROKES_PER_PLAYER) {
+        history.shift();
+      }
+
+      this.broadcast(
+        "paintStroke",
+        {
+          sessionId: client.sessionId,
+          ...stroke,
+        },
+        {
+          except: client,
+        }
+      );
     });
 
     this.onMessage("pose", (client, message: PoseMessage) => {
